@@ -59,6 +59,28 @@ So "distance" = Chebyshev pixels beyond the view edge ÷ 60. CosmeticExt uses
 exactly this unit (cells beyond the edge) everywhere, so `Range=` and every
 `Distance.*` value mean the same thing.
 
+Two `Type` bits change the metric. Both were read from the disassembly on
+2026-10-25 and are not tested in game.
+
+- **`0x800`** (YRpp `Shroud`), tested at `0x750B2D`. The source's cell must be
+  revealed (`MapClass::GetCellAt` 0x5657A0, cell flags `+0x12C & 0x18`). If it
+  isn't, the function returns 0.0 before any distance is computed, so the
+  sound is silent and the volume hook never runs.
+- **`0x40`** (`Local`), tested at `0x750BFA`. The view's half-size is **not**
+  subtracted. `[esp+0x38]` and `[esp+0x20]` then hold |dx| and 2|dy| from the
+  **screen centre**, unclamped, and `Range` is measured from there.
+
+`Screen` (`0x20`) is not tested here or in PlayAt.
+
+**Known gap: `Local` sounds.** The volume hook reads the engine's own locals,
+so its distance agrees with vanilla for `Local` sounds too. `EdgeDistance`,
+however, always measures beyond the edge. It drives the band pick, the delay
+and the echo threshold. So a `Type=LOCAL` sound with `Distance.Bands`,
+`Delay` or `Echo` would pick its band at a different distance from the one
+it fades by. Vanilla has 31 such sounds, all ambients and loops. Loops are
+never deferred, but bands on them would still disagree. The fix is for
+`EdgeDistance` to skip the half-size subtraction when `Type & 0x40`.
+
 ## Hooks
 
 | Address | Size | Name | What it does |
@@ -207,4 +229,5 @@ See the module docstring of `tools/distance_bake.py` and the tag reference.
 - Verified in game (2026-10-25): the DLL loads and reads every sound (818 in the
   loaded mod). A 32-minute game exited cleanly with all five hooks installed.
 - Not yet verified in game: the distance behaviour itself (bands, falloff,
-  scatter, diffuse, delay, echo). It needs a soundmd.ini that uses the tags.
+  scatter, diffuse, delay, echo). A listening test of Explosion14 has been
+  installed (2026-10-25, see CHANGELOG), and its debug.log lines will settle it.

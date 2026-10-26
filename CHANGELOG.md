@@ -7,6 +7,31 @@
 
 ## [unreleased] — 2026-10-25
 
+### Deployed — Explosion14 listening test
+- Installed loose in the live game dir, with no file there replaced:
+  `soundmd.ini` (sha256 `f4bfb36c…`), `audio97.idx` (`6a943ef0…`) and
+  `audio97.bag` (`5e2e183d…`, 12 PCM samples, 0.7 MiB).
+- The soundmd is the one the game was reading: vanilla `ra2md.mix/localmd.mix`,
+  818 sounds, matching the logged count. It is not the mod folder's 871-sound
+  soundmd.ini. Changes:
+  - `[CosmeticExt] LogBudget=200`;
+  - Explosion14 (the tank-shot impact, `Report` of S_CLSN58) gets Scatter 2,
+    Diffuse 0.5, Delay 0.25, Echo 1 from 14 cells;
+  - the baker's bands `Explosion14_D1..D3`, from 4, 14 and 32 cells, and
+    `Distance.Falloff=inverse`.
+- Every non-blank vanilla line was checked as kept, in order. `[SoundList]`
+  has 821 unique names and no duplicate keys, and all 12 variant samples are
+  present in the bag. The vanilla copy is saved beside it as
+  `soundmd.ini.vanilla.bak-cosmeticext-20261025-225445`.
+- To revert, delete the three files. The original never left its MIX.
+
+### Found — `Type` bits in the volume function
+- `0x800` returns silence for sources in unrevealed cells. `0x40` (`Local`)
+  measures from the screen centre instead of beyond the edge. `Screen` is
+  never tested. The DLL's `EdgeDistance` ignores `Local`, so a LOCAL sound's
+  band, delay and echo distance would disagree with its fade. Explosion14 is
+  not LOCAL. The fix is still open (DESIGN.md, "Known gap").
+
 ### Fixed — baker levels
 - Far variants were too loud, then turned down as a whole. The ground comb and
   the scattered tail were energy-normalised against white noise. An explosion
