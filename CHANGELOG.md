@@ -7,6 +7,21 @@
 
 ## [unreleased] — 2026-10-25
 
+### Verified in game
+- **VERIFIED, 2026-10-25, first launch through the CnCNet client.** In
+  syringe.log CosmeticExt is recognised and its handshake answers 0. The
+  hook count went from 3547 to 3553, i.e. our five plus the inherited
+  0x7504C9. debug.log shows `[CosmeticExt] loaded (built Oct 26 2026
+  04:40:14)` (the deployed CI build) and `soundmd.ini: 818 sound(s), 0 with
+  distance behaviour`. That proves the LoadAll-exit hook fires and the
+  handle-dereferencing sound walk reads the loaded mod's sounds. The game
+  ran 32 minutes and Syringe exited with code 0. Its only exception was the
+  same first-chance C++ one (0xE06D7363) that runs without CosmeticExt also
+  log.
+- Not yet exercised: the distance behaviour itself. No sound in the mod's
+  soundmd.ini uses the tags, so the PlayAt, volume and pan hooks ran their
+  inactive paths only.
+
 ### Deployed
 - CI run 40270184852 (commit 1f300cf, 0 warnings) produced `CosmeticExt.dll`
   with sha256 `e93526f2…11aec72`. It was copied byte-identical into the live

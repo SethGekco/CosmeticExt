@@ -195,5 +195,7 @@ See the module docstring of `tools/distance_bake.py` and the tag reference.
   - the baker (21 tests: physics, codec, names, end-to-end, idempotency,
     foreign-bag refusal)
 - Hook seats: verified statically, as listed above.
-- Not yet verified in game: the DLL build and the hooks at run time. The next
-  step is a CI build, then a deploy and a `debug.log` check.
+- Verified in game (2026-10-25): the DLL loads and reads every sound (818 in the
+  loaded mod). A 32-minute game exited cleanly with all five hooks installed.
+- Not yet verified in game: the distance behaviour itself (bands, falloff,
+  scatter, diffuse, delay, echo). It needs a soundmd.ini that uses the tags.
