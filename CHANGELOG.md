@@ -7,6 +7,14 @@
 
 ## [unreleased] — 2026-10-25
 
+### Changed — build
+- Silenced the one MSVC warning (C4996, `TacticalClass::CoordsToClient`
+  deprecated) at its single call, with the reason in the code. YRpp prefers an
+  inline twin that measures against different view bounds (0xB0CE28), but
+  the engine's own volume function calls 0x6D2140 (at 0x750BB9). Switching
+  would make the band distance disagree with the distance the engine
+  attenuates by.
+
 ### Added — distance-dependent sound (soundmd.ini)
 - `Distance.Bands=` / `Distance.Bands.From=`: play a different sound by
   distance. This was the first ask: a close, a nearby-off-screen and a far

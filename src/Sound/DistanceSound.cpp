@@ -275,7 +275,12 @@ namespace
 		if (!pTactical)
 			return false;
 
+		// YRpp deprecates the 0x6D2140 call ("inlined in game") in favour of
+		// an inline twin with different view bounds (0xB0CE28). The volume
+		// function 0x750AC0 itself calls 0x6D2140 (at 0x750BB9), so this is
+		// the one that reproduces the engine's distance exactly.
 		Point2D client {};
+#pragma warning(suppress: 4996)
 		pTactical->CoordsToClient(&coords, &client);
 
 		const float halfW = DSurface::ViewBounds.Width * 0.5f;
