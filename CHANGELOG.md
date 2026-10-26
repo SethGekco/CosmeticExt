@@ -7,6 +7,23 @@
 
 ## [unreleased] — 2026-10-25
 
+### Fixed — baker levels
+- Far variants were too loud, then turned down as a whole. The ground comb and
+  the scattered tail were energy-normalised against white noise. An explosion
+  is mostly bass, where the comb adds in phase and the air-absorbed tail
+  concentrates, so on vanilla `gexp14` the far bands came out up to 2.9× the
+  energy air absorption leaves. The clip guard then scaled whole variants down
+  1.5–9.3 dB, giving an audible level step at every band edge. It was found on
+  the first Explosion14 listening-test bake, before anything was installed.
+- Now each variant keeps exactly the energy air alone leaves of its own sample,
+  and full scale is kept by a look-ahead peak limiter (`limit_peaks`, about
+  1.5 ms around each peak) instead of whole-variant scaling. Measured on
+  `gexp14a`–`d` and `snukexpl`: level within 0.16 dB of air-only, deepest
+  limiter cut 1.9 dB. The bake report now notes cuts deeper than 3 dB.
+- Two tests added: a bass-heavy sound's energy must equal air-only within 1%
+  (the old code gave 1.74×), and the limiter must leave the body untouched,
+  including peaks at the very first and last frame.
+
 ### Verified in game
 - **VERIFIED, 2026-10-25, first launch through the CnCNet client.** In
   syringe.log CosmeticExt is recognised and its handshake answers 0. The
@@ -97,4 +114,4 @@
 - `tools/mixread.py`, vendored verbatim from MapForge commit 647c8ac (header
   line only).
 - Host tests: `tests/run_tests.sh`, with 60 C++ checks of the distance model
-  and 21 Python tests of the baker.
+  and 21 Python tests of the baker (23 since the level fix).

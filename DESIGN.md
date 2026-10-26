@@ -177,6 +177,15 @@ See the module docstring of `tools/distance_bake.py` and the tag reference.
 - **PCM16 output by default.** IMA ADPCM's ~20 dB-SNR white noise refilled
   band 3's top octave on vanilla `gexp14a` from −56 dB to −20 dB, which
   undoes the muffling.
+- **Level is what air alone leaves of each sample.** The comb and the tail
+  were first normalised against white noise. An explosion's energy is mostly
+  bass, where the comb adds in phase (+2.55 dB at g = 0.5) and where the
+  air-absorbed tail concentrates, so vanilla `gexp14`'s far bands came out up
+  to 2.9× too loud, and scaling the whole variant back under full scale then
+  cost 1.5–9.3 dB: a level step at every band edge. Now both are normalised
+  against the sample itself, and peaks are handled by a 1.5 ms look-ahead
+  limiter. Measured on `gexp14a`–`d` and `snukexpl`: within 0.16 dB of
+  air-only, with the limiter cutting at most 1.9 dB, around single peaks.
 - **Spreading is not baked.** The DLL applies it continuously
   (`Distance.Falloff=inverse` is added for baked sounds that set no falloff).
   Baking it too would count it twice, and a baked level could not follow the
@@ -192,8 +201,8 @@ See the module docstring of `tools/distance_bake.py` and the tag reference.
 
 - Host-tested:
   - the distance model (60 checks)
-  - the baker (21 tests: physics, codec, names, end-to-end, idempotency,
-    foreign-bag refusal)
+  - the baker (23 tests: physics, level, limiter, codec, names, end-to-end,
+    idempotency, foreign-bag refusal)
 - Hook seats: verified statically, as listed above.
 - Verified in game (2026-10-25): the DLL loads and reads every sound (818 in the
   loaded mod). A 32-minute game exited cleanly with all five hooks installed.

@@ -202,10 +202,16 @@ extra: the on-screen sound doesn't already have it.
    values match the ISO 9613-2 tables, and its tests check that.
 2. **Ground reflection.** A second path off the ground, delayed by the path
    difference, forms a comb filter, which is the hollow, phasey quality of
-   distant sound. It is energy-normalised, so it reshapes the tone without
-   making the sound louder or quieter.
+   distant sound. It reshapes the tone without making the sound louder or
+   quieter.
 3. **Scattered tail.** A decaying noise reverberation, itself air-absorbed,
-   that grows with each band. This is the rolling of far thunder.
+   that grows with each band. This is the rolling of far thunder. It spreads
+   the sound out in time without adding energy.
+
+**Level.** Each variant keeps exactly the energy that air absorption alone
+leaves of its own sample, so only air makes a band quieter. If a peak would
+go above full scale, a limiter turns down just the few milliseconds around
+it, not the whole variant. The bake report notes any cut deeper than 3 dB.
 
 **Spreading loss is not baked.** CosmeticExt applies it at run time, smoothly
 and at the exact distance. If a baked sound doesn't set a `Distance.Falloff`

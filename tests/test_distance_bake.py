@@ -148,6 +148,41 @@ class Physics(unittest.TestCase):
         self.assertLessEqual(float(np.max(np.abs(y))), 0.98 + 1e-9)
         self.assertLess(gain, 1.0)
 
+    def test_level_is_air_only_on_bass_heavy_sound(self):
+        # An explosion's energy is mostly bass, where the ground comb adds in
+        # phase and the air-absorbed tail concentrates. Normalising those
+        # against white noise made vanilla gexp14's far bands up to 2.9x too
+        # loud; each variant must keep what air alone leaves of ITS sample.
+        t = np.arange(FS) / FS
+        rng = np.random.default_rng(7)
+        x = (0.5 * np.sin(2 * np.pi * 70 * t) + 0.05 * rng.standard_normal(FS)) * np.exp(-t / 0.25)
+        x = x[:, None]
+        for band, d in enumerate((9, 23, 50)):
+            r_air, r_geom = d * 25.0, (8 + d) * 25.0
+            air = dict(db.BAKE_DEFAULTS, ground=0.0, tail=0.0)
+            ya, ga = db.bake_signal(x, FS, r_air, r_geom, band, 3, air, 'bass')
+            for cfg in (dict(db.BAKE_DEFAULTS, ground=0.5, tail=0.0), dict(db.BAKE_DEFAULTS)):
+                y, gain = db.bake_signal(x, FS, r_air, r_geom, band, 3, cfg, 'bass')
+                self.assertEqual((gain, ga), (1.0, 1.0), f'band {band + 1} must not need the limiter')
+                self.assertAlmostEqual(np.sum(y ** 2) / np.sum(ya ** 2), 1.0, delta=0.01,
+                                       msg=f'band {band + 1} ground {cfg["ground"]} tail {cfg["tail"]}')
+
+    def test_limiter_cuts_only_around_the_peak(self):
+        n = FS
+        y = np.full((n, 2), 0.3)
+        y[1::2] *= -1
+        y[n // 2, 0] = 1.6
+        out, gain = db.limit_peaks(y.copy(), FS)
+        self.assertLessEqual(float(np.max(np.abs(out))), 0.98 + 1e-12)
+        self.assertAlmostEqual(gain, 0.98 / 1.6, places=9)
+        w = int(1.5e-3 * FS)
+        far = np.r_[0:n // 2 - 2 * w, n // 2 + 2 * w:n]
+        np.testing.assert_array_equal(out[far], y[far])  # the body is untouched
+        edge = y.copy()
+        edge[0, 1] = edge[-1, 1] = 1.2                    # peaks at both ends
+        out, _ = db.limit_peaks(edge, FS)
+        self.assertLessEqual(float(np.max(np.abs(out))), 0.98 + 1e-12)
+
 
 class Codec(unittest.TestCase):
     def test_ima_mono_roundtrip(self):

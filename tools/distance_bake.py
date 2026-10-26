@@ -41,12 +41,17 @@ which d * m is path the on-screen sound does not already have.
    ground at the full distance r = (ref + d) * m, path difference
    sqrt(r^2+(hs+hr)^2) - sqrt(r^2+(hs-hr)^2), reflection coefficient Ground:
    H = (1 + g e^{-j 2 pi f tau}) / sqrt(1+g^2) -- the comb filter that makes
-   distant sound hollow (first notch at 1/(2 tau)). Energy-normalised, so it
-   reshapes the spectrum without changing the level.
+   distant sound hollow (first notch at 1/(2 tau)). It reshapes the
+   spectrum without changing the level: see bake_signal.
 3. Scattering tail -- the result convolved with exponentially decaying noise
    (pre-delay and T60 growing with band), itself air-absorbed over a 1.5x
    longer extra path, mixed at Tail scaled by band: the "rolling" of far
-   thunder.
+   thunder. It spreads the sound's energy in time; it adds none.
+
+Level: each variant has exactly the energy air absorption alone leaves of
+its own sample. Peaks above 0.98 are then turned down by a look-ahead
+limiter over a few milliseconds, not by scaling the whole variant, so the
+level at a band edge stays continuous (limit_peaks).
 
 Filters 1+2 are one linear-phase FIR (frequency-sampled, Blackman window) with
 its delay removed, so the variant starts exactly when the original does.
@@ -187,19 +192,40 @@ def stable_seed(*parts):
     return int.from_bytes(hashlib.sha1('|'.join(parts).encode()).digest()[:8], 'little')
 
 
+def _energy(a):
+    return float(np.sum(a * a))
+
+
+def _filter(x, h, delay):
+    return np.stack([fft_convolve(x[:, ch], h)[delay:delay + x.shape[0]]
+                     for ch in range(x.shape[1])], axis=1)
+
+
 def bake_signal(x, fs, r_air, r_geom, band, nbands, cfg, seed_key):
     """x: float array (frames, channels) in [-1, 1]. Returns (variant, gain)
-    where gain < 1 is how far the clip guard had to turn it down."""
-    h, delay = design_fir(fs, r_air, r_geom, cfg)
-    channels = []
-    for ch in range(x.shape[1]):
-        y = fft_convolve(x[:, ch], h)[delay:delay + x.shape[0]]
-        channels.append(y)
-    y = np.stack(channels, axis=1)
+    where gain < 1 is the deepest cut the peak limiter made (see limit_peaks).
+
+    Loudness is pinned to the physics that removes energy -- air absorption.
+    The ground comb and the scattered tail only reshape it, and they are
+    normalised against THIS sample, not against white noise: an explosion's
+    energy is mostly bass, where the comb adds in phase (+2.55 dB at g=0.5)
+    and where the heavily air-absorbed tail concentrates, so white-noise
+    normalisation made the far bands up to 2.9x too loud on vanilla gexp14
+    and the clip guard then had to drop them 1.5-9.3 dB -- a level step at
+    every band edge."""
+    h, delay = design_fir(fs, r_air, r_geom, cfg, ground=False)
+    y = _filter(x, h, delay)
+    target = _energy(y)  # what air absorption alone leaves of this sample
+
+    if cfg['ground'] > 0.0:
+        h, delay = design_fir(fs, r_air, r_geom, cfg)
+        yg = _filter(x, h, delay)
+        eg = _energy(yg)
+        y = yg * math.sqrt(target / eg) if eg > 0.0 else yg
 
     weight = (band + 1) / nbands
     level = cfg['tail'] * weight
-    if level > 0.0 and cfg['tailtime'] > 0.0:
+    if level > 0.0 and cfg['tailtime'] > 0.0 and target > 0.0:
         t60 = max(0.05, cfg['tailtime'] * weight)
         pre = int((0.012 + 0.010 * band) * fs)  # first scattered arrivals
         n = int(t60 * fs)
@@ -211,16 +237,20 @@ def bake_signal(x, fs, r_air, r_geom, band, nbands, cfg, seed_key):
         hs, hd = design_fir(fs, r_air * 1.5, r_geom, cfg, ground=False)
         ir = fft_convolve(ir, hs)[hd:hd + n]
         ir = np.concatenate((np.zeros(pre), ir))
-        ir /= math.sqrt(float(np.sum(ir * ir))) or 1.0
         wet = np.stack([fft_convolve(y[:, ch], ir) for ch in range(y.shape[1])], axis=1)
-        out = np.zeros_like(wet)
-        out[:y.shape[0]] += y
-        y = out + level * wet
+        ew = _energy(wet)
+        if ew > 0.0:
+            # Tail energy = level^2 of the direct sound's; then the sum is
+            # scaled back to the direct energy: scattering spreads the
+            # energy in time, it does not add any.
+            out = np.zeros_like(wet)
+            out[:y.shape[0]] += y
+            out += wet * (level * math.sqrt(target / ew))
+            y = out * math.sqrt(target / _energy(out))
 
     # Trim the silent end of the tail, then a 5 ms fade so nothing clicks.
     env = np.max(np.abs(y), axis=1)
     peak = float(env.max()) if env.size else 0.0
-    gain = 1.0
     if peak > 0.0:
         above = np.nonzero(env > peak * 10 ** (-60 / 20))[0]
         end = max(int(above[-1]) + 1, x.shape[0]) if above.size else x.shape[0]
@@ -228,10 +258,36 @@ def bake_signal(x, fs, r_air, r_geom, band, nbands, cfg, seed_key):
         fade = min(len(y), int(0.005 * fs))
         if fade > 0:
             y[-fade:] *= np.linspace(1.0, 0.0, fade)[:, None]
-        if peak > 0.98:
-            gain = 0.98 / peak
-            y *= gain
-    return y, gain
+    return limit_peaks(y, fs)
+
+
+def limit_peaks(y, fs, ceiling=0.98, window_ms=1.5):
+    """Look-ahead peak limiter: turn down only the few milliseconds around a
+    peak above `ceiling`, instead of the whole sample, so the variant's
+    loudness (and so the level match at the band edge) is kept.
+
+    need[i] is the gain frame i needs to sit at the ceiling. The gain is a
+    running minimum of need over +-W, then a moving average of that over W+1
+    (about 1.5 ms each, so the cut ramps in ahead of the peak and back out
+    after it). Every value averaged into frame i is a minimum over a window
+    containing i, so it is <= need[i], and so is their average: no frame
+    ends above the ceiling. The final minimum with need only catches
+    rounding. Returns (y, deepest gain)."""
+    env = np.max(np.abs(y), axis=1) if y.size else np.zeros(0)
+    if not env.size or float(env.max()) <= ceiling:
+        return y, 1.0
+    need = np.minimum(1.0, ceiling / np.maximum(env, 1e-12))
+    w = max(1, int(window_ms * 1e-3 * fs))
+    padded = np.concatenate((np.ones(w), need, np.ones(w)))  # nothing beyond the ends
+    run_min = np.lib.stride_tricks.sliding_window_view(padded, 2 * w + 1).min(axis=1)
+    half = w // 2
+    # Edge values, not ones: run_min[0] is a minimum over a window that
+    # contains every frame the padding is averaged into.
+    padded = np.pad(run_min, (half, w - half), mode='edge')
+    gain = np.convolve(padded, np.ones(w + 1) / (w + 1), mode='valid')
+    gain = np.minimum(gain, need)
+    y = y * gain[:, None]
+    return y, float(gain.min())
 
 
 # ---------------------------------------------------------------------------
@@ -849,9 +905,9 @@ def main(argv=None):
                     variant_tokens[i].append(prefix + renders[key])
                     continue
                 y, gain = bake_signal(x, rate, r_air, r_geom, i, len(bands), cfg, sample.lower())
-                if gain < 0.89:  # beyond 1 dB the level step at the band edge is audible
-                    report.append(f'  note: {sample} band {i + 1} turned down {-20 * math.log10(gain):.1f} dB '
-                                  f'to stay below full scale')
+                if gain < 0.71:  # a limiter cut deeper than 3 dB is audible on transients
+                    report.append(f'  note: {sample} band {i + 1}: peak limiter cut up to '
+                                  f'{-20 * math.log10(gain):.1f} dB to stay below full scale')
                 y16 = np.clip(np.round(y * 32767.0), -32768, 32767).astype(np.int16)
                 vname = variant_sample_name(sample, i + 1, repr(key), taken)
                 taken.add(vname.lower())
