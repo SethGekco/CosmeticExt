@@ -7,6 +7,19 @@
 
 ## [unreleased] — 2026-10-25
 
+### Deployed
+- CI run 40270184852 (commit 1f300cf, 0 warnings) produced `CosmeticExt.dll`
+  with sha256 `e93526f2…11aec72`. It was copied byte-identical into the live
+  game dir, with no earlier copy there. `-i=CosmeticExt.dll` was appended after
+  WarZoneExt in both `Resources/Compatibility/Unix/wine-game.sh` and
+  `Resources/ClientDefinitions.ini`; backups are `*.bak-cosmeticext-20261025-214212`.
+  It imports only KERNEL32, like WeatherExt. It has not yet been seen running:
+  the game that was open at deploy time was launched before it was registered.
+- Documented in DESIGN.md: the DLL also installs Phobos `Debug.cpp`'s
+  `0x7504C9` hook and its four byte patches, as every sibling Ext DLL does.
+  This is harmless (log-only and identical bytes), but the overlap checker
+  cannot see it.
+
 ### Changed — build
 - Silenced the one MSVC warning (C4996, `TacticalClass::CoordsToClient`
   deprecated) at its single call, with the reason in the code. YRpp prefers an

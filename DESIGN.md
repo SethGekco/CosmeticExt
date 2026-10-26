@@ -69,6 +69,23 @@ exactly this unit (cells beyond the edge) everywhere, so `Range=` and every
 | `0x750D29` | 5 | `VocClass_ComputePan_CosmeticExt` | Diffuse: pulls EAX toward centre. Stolen: `fld [esp+0x18]; pop edi`, ESP unchanged at replay. |
 | `0x55D3DA` | 5 | `MainLoop_CosmeticExt_Tick` | Once per frame: dispatches due delayed sounds and echoes. Stolen: `mov [0xA8B55C],eax`. |
 
+**A sixth hook comes with the toolchain, not from us.** The built DLL's
+`.syhks00` also lists `0x7504C9 VocClass_ReadINI_LogMissingSamples`, and its
+`.patch` section carries four byte patches (`0x40A55D`, `0x40A5BC` and two
+debug.log strings). Both come from `Phobos/src/Utilities/Debug.cpp`, which the
+project compiles for `Debug::Log`. Every sibling Ext DLL carries the same set:
+WeatherExt, DossierExt, WarZoneExt, IntelExt, BunkerExt and CommandBarExt were
+checked on 2026-10-25. Rex's deployed Phobos.dll, a June build, does not.
+
+- **The hook** only logs `[Developer warning] VocClass [...] has missing
+  sample` and returns 0, so the copies chain safely. Each DLL adds one
+  duplicate warning line per missing sample; the live debug.log had none.
+- **The patches** write identical bytes, so applying them more than once
+  changes nothing.
+
+`check_hook_overlap` does not see this hook because it scans `src/` only.
+Parse the built DLL's `.syhks00` to see everything that is really installed.
+
 Checks run on the seats:
 
 - Disassembly shows no jump into the middle of any stolen span.
