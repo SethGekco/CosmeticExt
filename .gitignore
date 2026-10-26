@@ -1,0 +1,13 @@
+# MSVC
+/DevBuild/
+/Debug/
+/Release/
+/.vs/
+*.user
+*.obj
+*.pdb
+*.ilk
+# Python
+__pycache__/
+# local bake output
+/bake-out/
