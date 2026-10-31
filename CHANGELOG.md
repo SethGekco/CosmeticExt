@@ -7,6 +7,24 @@
 
 ## [unreleased] — 2026-10-30
 
+### Added — `ColorRules=` engine side, first build (TODO.md #1)
+- `src/Color/ColorModel.*`: the cycle (`Increment`/`Decrement`/`Random` as a
+  shuffle, every `Repeat=` restart point, House/Game/Source scope) and the
+  per-channel precedence. Pure C++, 348 host checks in
+  `tests/test_color_model.cpp`. Why: the rules are the easy part to get
+  wrong and the only part that can be tested without the game.
+- `src/Color/ColorRules.cpp`: the INI tables, the per-object look kept by
+  UniqueID, the creation contexts (factory, cloning vat, free unit,
+  superweapon, paradrop, Ares UnitDelivery, deploy/undeploy), and a
+  savegame block at the very end of the save, so a save made without it
+  still loads. The draw side wraps `GetRemapColour` in the four techno
+  vtables (slot 0x1E4) from DllMain: no stolen bytes, and Phobos' hook
+  inside the function keeps working.
+- Why this design: presentation only (owner, losses and AI never change),
+  and deterministic online (the look is decided at sim events in creation
+  order, "random" is hashed, the synced randomizer is never touched).
+- Not yet seen in game. Docs and the test snippet follow.
+
 ### Decided — the colour cycle's default scope (TODO.md #1)
 - Rex chose on 2026-10-30: by default each player keeps their own place in a
   colour cycle, and each starts at the first colour. Game-wide and

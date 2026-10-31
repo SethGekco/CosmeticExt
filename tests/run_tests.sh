@@ -9,4 +9,8 @@ g++ -std=c++20 -O1 -Wall -Wextra -Werror \
 	"$here/test_distance_model.cpp" "$here/../src/Sound/DistanceModel.cpp" \
 	-o "$out/test_distance_model"
 "$out/test_distance_model"
+g++ -std=c++20 -O1 -Wall -Wextra -Werror \
+	"$here/test_color_model.cpp" "$here/../src/Color/ColorModel.cpp" \
+	-o "$out/test_color_model"
+"$out/test_color_model"
 python3 -m unittest "$here/test_distance_bake.py"

@@ -1,13 +1,15 @@
 #include "CosmeticExt.h"
+#include "Color/ColorRules.h"
 
 #include <Phobos.h>
 #include <Syringe.h>
 
 HANDLE CosmeticExtDLL::hInstance = nullptr;
 
-// No DEFINE_PATCH and no ExeRun seat: every feature is a hook, so nothing has
-// to run before WinMain. The load banner is logged from the first soundmd.ini
-// read instead (ExeRun-time logging is discarded -- debug.log isn't open yet).
+// No DEFINE_PATCH and no ExeRun seat. Every feature is a hook, except the
+// ColorRules vtable wrap, which DllMain writes directly. Status lines are
+// logged later, from the first soundmd.ini and rules reads (ExeRun-time
+// logging is discarded -- debug.log isn't open yet).
 
 bool __stdcall DllMain(HANDLE hInstance, DWORD dwReason, LPVOID)
 {
@@ -15,6 +17,7 @@ bool __stdcall DllMain(HANDLE hInstance, DWORD dwReason, LPVOID)
 	{
 		CosmeticExtDLL::hInstance = hInstance;
 		Phobos::hInstance = hInstance;
+		ColorRules::PatchVtables();
 	}
 	return true;
 }

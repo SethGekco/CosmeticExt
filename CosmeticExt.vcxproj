@@ -20,6 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ClCompile Include="src\Color\ColorModel.cpp" />
+    <ClCompile Include="src\Color\ColorRules.cpp" />
     <ClCompile Include="src\CosmeticExt.cpp" />
     <ClCompile Include="src\Phobos.cpp" />
     <ClCompile Include="src\Sound\DistanceModel.cpp" />
@@ -32,6 +34,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ClInclude Include="src\Color\ColorModel.h" />
+    <ClInclude Include="src\Color\ColorRules.h" />
     <ClInclude Include="src\CosmeticExt.h" />
     <ClInclude Include="src\Sound\DistanceModel.h" />
     <ClInclude Include="src\Sound\DistanceSound.h" />
