@@ -7,6 +7,17 @@
 
 ## [unreleased] — 2026-10-30
 
+### Deployed — the ColorRules fix build (aa65ffc)
+- The CI artifact of aa65ffc (run 41175384258: build and tests green, 0
+  warnings) is now the live `CosmeticExt.dll`, sha256 `67d2d23a…`. Its
+  `.syhks00` lists all 23 hooks, the four new ones included. The game
+  wasn't running.
+- Backup of the previous DLL (0690f1c, `c21006c3…`):
+  `CosmeticExt.dll.bak-cosmeticext-20261030-231108`.
+- The test snippet stays installed in rulesmd.ini, unchanged.
+- Not seen in game yet. What Rex should see is in docs/colorrules.md,
+  "What to look for".
+
 ### Fixed — ColorRules faults from Rex's first game
 - Rex played Blockade with the test snippet (22:32). His words: "Paradrop
   definitely changes the pallet, I didn't see my color be initially dark
