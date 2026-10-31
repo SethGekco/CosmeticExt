@@ -6,7 +6,7 @@ nothing that Rex hasn't.
 
 ---
 
-## 1. Remap-colour and palette overrides (`ColorRules=`) — not started, one answer to confirm
+## 1. Remap-colour and palette overrides (`ColorRules=`) — not started, every decision answered
 
 Requested 2026-10-30. Verbatim:
 
@@ -107,12 +107,16 @@ says so; confirm a reading with Rex if building on it would be costly.
    default it should be continuous rather than limited."
    - The scope is an INI setting on the cycle section (a name such as
      `RemapColors.Scope=Game|House|Source` is only a suggestion).
-   - Reading: by default there is one sequence for the whole game. It keeps
-     going and never resets per player or per factory.
-   - Rex asked what that reading meant (2026-10-30). It was explained with an
-     example: two players, each building `AMCV`s under one cycle. Do they
-     share one place in the list, or does each player (or each factory) keep
-     its own? Open until Rex confirms.
+   - Rex asked for context, got the two-players example, and chose
+     (2026-10-30): "Default: each player has their own place in the cycle,
+     and each starts at the first colour."
+   - So by default each house keeps its own place in the cycle, and every
+     house starts at the first colour. A cycle never stops: `Repeat=` decides
+     where it restarts. Game-wide and per-source scopes are the other values
+     of the scope setting.
+   - Reading: "the first colour" is the first one the pattern yields. That is
+     the list's first entry under `Increment`, its last under `Decrement`, and
+     the shuffle's first under `Random`.
 2. **`Repeat=`.** "Where in the cycle does it restart."
    - `Repeat=` names the entry the cycle restarts from after its last colour:
      `Beginning` and `End` are the list's first and last entries, `Center` the
@@ -207,10 +211,9 @@ already has a rule makes, copies or turns into another:
   - "By default" leaves room for a tag that drops the rule on an owner
     change. It hasn't been asked for.
 
-**Still open for Rex** (do not guess this):
-- Decision 1, the cycle's default scope. When several objects use one cycle,
-  do they share one place in the list for the whole game, or does each player
-  or each source keep its own?
+**Nothing is open for Rex.** The lines marked *Reading* and *Builder's
+choices* are interpretations, not his words. Follow them unless he says
+otherwise, and say so in the docs.
 
 ---
 

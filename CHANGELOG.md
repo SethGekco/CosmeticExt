@@ -7,6 +7,13 @@
 
 ## [unreleased] — 2026-10-30
 
+### Decided — the colour cycle's default scope (TODO.md #1)
+- Rex chose on 2026-10-30: by default each player keeps their own place in a
+  colour cycle, and each starts at the first colour. Game-wide and
+  per-source cycles stay available as settings.
+- Every `ColorRules=` decision is now answered. Why: the spec can be built
+  without guessing. Nothing is built yet.
+
 ### Decided — `ColorRules=` overlaps and owner changes (TODO.md #1)
 - Rex answered the three overlap examples on 2026-10-30: by default a rule
   never passes along a chain.
