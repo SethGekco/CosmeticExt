@@ -7,6 +7,15 @@
 
 ## [unreleased] — 2026-10-30
 
+### Deployed — LOCAL fix and `[SoundList]` diagnostic
+- CI run 41159376142 (commit fadc0fb; build and test green, 0 warnings)
+  produced `CosmeticExt.dll` with sha256 `0c81c55a…`. It was copied
+  byte-identical into the live game dir, replacing `e93526f2…`. Backups:
+  `CosmeticExt.dll.bak-cosmeticext-20261030-192016` and the matching `.map`.
+- Same six hooks at the same seats and sizes as before. It imports only
+  KERNEL32. Registration is unchanged: it is already in both `wine-game.sh`
+  and `ClientDefinitions.ini`. Not yet seen running.
+
 ### Verified in game — the Explosion14 listening test
 - Two games on 2026-10-26 (00:17 and 00:29) ran with the listening test
   installed. debug.log listed Explosion14 and `Explosion14_D1..D3`, with
