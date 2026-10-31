@@ -7,6 +7,19 @@
 
 ## [unreleased] — 2026-10-30
 
+### Added — `ColorRules=` docs and test snippet; build warning fixed
+- `docs/colorrules.md`: the tag reference, when a look is decided and which
+  rule wins, every *Reading* and *Builder's choice*, the limits, and a test
+  snippet that uses only sections and colours present in Rex's loaded mod.
+  DESIGN.md gains the engine's remap path, the design decisions and the
+  hook table. README and TODO #1 point at them.
+- README: CosmeticExt must now stay **last** in the `-i=` list. Why: its
+  savegame block is the last thing in the file, which is what lets a save
+  made without it load.
+- Fixed MSVC C4456 (a shadowed iterator in `OnUnlimbo`), the build's only
+  warning. The "palette has no remap" warning no longer builds a string
+  every frame.
+
 ### Added — `ColorRules=` engine side, first build (TODO.md #1)
 - `src/Color/ColorModel.*`: the cycle (`Increment`/`Decrement`/`Random` as a
   shuffle, every `Repeat=` restart point, House/Game/Source scope) and the

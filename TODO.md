@@ -6,7 +6,21 @@ nothing that Rex hasn't.
 
 ---
 
-## 1. Remap-colour and palette overrides (`ColorRules=`) — not started, every decision answered
+## 1. Remap-colour and palette overrides (`ColorRules=`) — built 2026-10-30, not yet seen in game
+
+**Status (2026-10-30).** Built as specified below: `src/Color/`, host tests
+in `tests/test_color_model.cpp`, reference and a test snippet in
+[docs/colorrules.md](docs/colorrules.md), engine notes in DESIGN.md. The
+docs list every *Reading* and *Builder's choice*. Left to do:
+
+- Rex runs the test snippet. Proof is his debug.log showing the
+  `GetRemapColour wrapped in 4 of 4` line and the per-object decisions.
+- Check in game: a save and a load restore the colours (`saved ...` and
+  `restored ...` lines); a paradrop plane keeps its own colour while its
+  troops take the rule; a deployed MCV follows its own type's rule.
+- Not covered, by choice, and listed in the docs: `PreClick`/`PostClick`
+  UnitDelivery weapons, and `Factory.ColorRules` on a construction yard.
+
 
 Requested 2026-10-30. Verbatim:
 

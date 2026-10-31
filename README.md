@@ -29,13 +29,33 @@ make distance sound like distance:
 Full tag reference: [docs/soundmd-tags.md](docs/soundmd-tags.md).
 Example: [docs/examples/soundmd-distance-example.ini](docs/examples/soundmd-distance-example.ini).
 
+## Remap colours and palettes
+
+rulesmd.ini tags that give an object a different player colour or palette
+without changing its owner. A civilian can wear the colour of the player who
+summoned it, MCVs can cycle through colours, and paradropped troops can use a
+desert palette:
+
+- `ColorRules=` on a TechnoType or a superweapon (paradrop, Ares
+  `UnitDelivery`), `Factory.ColorRules=` on a factory and
+  `FreeUnit.ColorRules=` on a building with `FreeUnit=`.
+- `[Color_*]` rule sections: `RemapColors=` takes colours, `Owner` or
+  `Invoker`, and a list cycles (`Increment`, `Decrement`, `Random`, with a
+  restart point). `PaletteSwitch=` swaps the palette.
+- Every client sees the same colours, and the look survives save/load.
+
+Reference and a test snippet: [docs/colorrules.md](docs/colorrules.md).
+
 ## Install
 
 1. Put `CosmeticExt.dll` in the game folder, next to `gamemd.exe`.
 2. Add `-i=CosmeticExt.dll` to the Syringe command line (or to your client's
-   launch definitions). Order relative to Ares/Antares/Phobos does not matter.
-3. Add tags to soundmd.ini. At startup `debug/debug.log` lists every sound you
-   configured, with its resolved values.
+   launch definitions), **last** in the list. The colour rules store their
+   state at the very end of a savegame, which is what keeps older saves
+   loadable.
+3. Add tags to soundmd.ini and rulesmd.ini. At startup `debug/debug.log`
+   lists every sound you configured, with its resolved values, and a summary
+   of the colour rules.
 
 Distance bands and the baked bags need **Ares or Antares**, which load
 `audio01`..`audio99` bags. The runtime tags work on their own.
@@ -76,6 +96,8 @@ exit status is the verdict.
 |---|---|
 | `src/Sound/DistanceModel.*` | The distance acoustics as plain C++, unit-tested on the host |
 | `src/Sound/DistanceSound.*` | INI reading, the deferred-sound queue, the hooks |
+| `src/Color/ColorModel.*` | Colour cycles and rule precedence as plain C++, unit-tested on the host |
+| `src/Color/ColorRules.*` | rulesmd.ini tags, per-object looks, creation contexts, the savegame block, the hooks |
 | `tools/distance_bake.py` | Offline baker for the frequency effects |
 | `tools/mixread.py` | MIX reader, vendored from MapForge |
 | `tools/check_hook_*.py` | Hook overlap/bounds checks run by CI |

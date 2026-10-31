@@ -16,7 +16,10 @@ Rules for everything in it:
   tests. The engine-facing code is a thin layer of hooks over it.
 
 The first feature is distance-dependent sound. The user-facing reference is
-[docs/soundmd-tags.md](docs/soundmd-tags.md).
+[docs/soundmd-tags.md](docs/soundmd-tags.md). The second is per-object remap
+colours and palettes (`ColorRules=`), documented in
+[docs/colorrules.md](docs/colorrules.md) and described at the end of this
+file.
 
 ## The engine's positional sound path (gamemd 1.001)
 
@@ -224,6 +227,89 @@ See the module docstring of `tools/distance_bake.py` and the tag reference.
   strips them first, and the tests check that baking its own output
   reproduces the same soundmd.ini and bag byte for byte.
 
+## Remap colours and palettes (`ColorRules=`)
+
+The spec, Rex's answers and the readings are in TODO.md #1. The user-facing
+reference is [docs/colorrules.md](docs/colorrules.md).
+
+### The engine's remap path (gamemd 1.001)
+
+| Address | What |
+|---|---|
+| `0x705D70` | `TechnoClass::GetRemapColour`, virtual slot `0x1E4`. If the type has an art `Palette=` (`TechnoTypeClass+0xDF0`, a scheme vector), it returns `Palette->Items[Owner->ColorSchemeIndex]->LightConvert` and ignores disguises. Otherwise, when the local player can't see through a disguise (`IsClearlyVisibleTo`, slot `0x440`), it uses the disguise house's scheme (`GetDisguiseHouse(true)`, slot `0xD0`). Otherwise `ColorScheme::Array[Owner->ColorSchemeIndex]->LightConvert`. |
+| `0x7F5E54`, `0x7EB23C`, `0x7E40A0`, `0x7E2488` | The slot in the Unit, Infantry, Building and Aircraft vtables (`AbsVTable + 0x1E4`). All four hold `0x705D70`. No deployed DLL references these addresses. The abstract classes' slots (`0x7E8E78`, `0x7F4B44`) are never called on a live object, so they are left alone. |
+| `0xB054D0` | `ColorScheme::Array`. Each `[Colors]` entry appears twice: once with `ShadeCount` 1 and once with 53. A house's `ColorSchemeIndex` (`HouseClass+0x16054`) points at the 53-shade one. The engine's name lookup (`0x474A90`) takes the first match whose `ShadeCount` is not 1, and so do we. |
+| `0x6263D0` | `ColorScheme::GeneratePalette(char*)`, what art `Palette=` uses. Its loader (`0x627590`) builds `<name>` + the theater's extension + `.PAL`, upper-cased, so `desert01` loads `DESERT01TEM.PAL` in temperate. It returns one scheme per colour, cached by name. A missing file gives no vector. |
+| `0x534DBE` | The theater has rebuilt its palettes, which frees the generated schemes. We drop our cached pointers here. |
+
+### Design
+
+- **The draw side is a vtable wrap, not a hook.** DllMain swaps slot
+  `0x1E4` in the four concrete techno vtables for a wrapper. The wrapper
+  calls the original first, so Phobos' hook inside the function
+  (`0x705D74`) still runs. Then, only for an object with a stored look, it
+  picks the scheme itself. No stolen bytes, and no chain to truncate. The
+  first rules read logs how many slots still hold the wrapper.
+- **The look is decided once, at a simulation event.** The events are the
+  first `Unlimbo`, and the `KickOutUnit` entry for factory products and
+  clones. They happen in the same order on every client, so a cycle hands
+  out the same colours everywhere. Hashes never take object IDs, which differ
+  between clients (`ScenarioClass::UniqueID` starts from a salt). A Source
+  scope keys on the order in which sources first appear instead.
+- **Per-object state is a map keyed by `AbstractClass::UniqueID`.** It keeps
+  only objects a rule touched, plus a `Seen` set of decided objects so that
+  leaving a transport does not decide again. Both are pruned against
+  `TechnoClass::Array` when `Seen` outgrows the live objects. IDs are never
+  reused within a game and survive save/load.
+- **Creation contexts.** The context stack is valid only on the frame it was
+  opened, and a stale entry is dropped. A superweapon context collects what
+  its launch unlimbos and decides it when the launch returns. Only then can
+  a carrier be told apart from its cargo: an object with passengers is a
+  paradrop plane. Its passengers get a pending entry that is consumed when
+  they land. A Grand_Opening context marks free units. A deploy or undeploy
+  records the parent against the new object until that object unlimbos.
+  Ares `UnitDelivery` places objects after a deferment, outside any call we
+  can see, so it is matched by type in a frame window around the due frame.
+  The launch only counts when `IsReady` went from true to false, because
+  Ares clears it only when the weapon really fired (`SuperClass_ClickFire`).
+- **The savegame block goes at the very end of the save,** not at Phobos'
+  early pair (`0x67D32C`/`0x67E826`). CosmeticExt is last in the inject
+  list, so its block is the last thing in the file. A save made without
+  the block then simply ends, the read comes back short, and nothing else is
+  disturbed. At Phobos' pair the same read would eat the next block's bytes
+  and break the load. The block starts with a magic, a version and a byte
+  length, and the payload is parsed with bounds checks.
+- **Rules are read idempotently**, on every pass, at the `Read_File` tail.
+  A key absent from a pass leaves the earlier value alone. A rule first
+  named by a later file is looked up in rulesmd.ini too. Type tags are
+  keyed by type ID, not pointer, with a fallback from CloningExt's `.clone`
+  and `.construct` IDs to the base type.
+
+### Hooks
+
+All return 0. None of the stolen windows holds a relative branch or call.
+
+| Address | Size | What it does | Shared with (deployed) |
+|---|---|---|---|
+| `0x668F6A` | 5 | `Read_File` tail, ESI = this pass's INI: reads the tags, logs the vtable wrap once. Stolen: `mov eax,[0xA8B238]`. | Phobos, BuildQueueExt, WeatherExt, Country_Extension4, YRAggressiveStance |
+| `0x6F6CBE` | 5 | `TechnoClass::Unlimbo` after `ObjectClass::Unlimbo` succeeded, ESI = this: the birth point. Stolen: `mov eax,[edi]; push 1; cdq`. | none |
+| `0x443C60` | 6 | `BuildingClass::KickOutUnit` entry, ECX = building, `[esp+4]` = object: factory products (`Factory->Object == object`) and clones. Stolen: `sub esp,0x130`. | CloningExt, GiftBoxHost (both return 0) |
+| `0x4FAE85` | 5 | `HouseClass::Fire_SW` before `ClickFire`, EBX = house, EDI = super: opens the superweapon context and records `IsReady`. Stolen: `mov eax,[0xA83D4C]`. | none |
+| `0x4FAEED` | 5 | `Fire_SW`'s only epilogue, EDI = super: closes it. Stolen: `pop edi; pop esi; pop ebp; mov al,1`. | none |
+| `0x446AA9` | 6 | `Grand_Opening` (0x445F80, EBP = this throughout), at the `FreeUnit=` block: opens the free-unit context. Stolen: `mov ecx,[ebp+0x520]`. | none |
+| `0x446FB6` | 7 | `Grand_Opening` epilogue, before EBP is popped: closes it. Stolen: `pop edi; pop esi; pop ebp; pop ebx; add esp,0x58`. | none |
+| `0x7396D2` | 5 | Unit deploying (0x7393C0, EBP = unit), after the `BuildingClass` constructor, EBX = new building. Stolen: `mov eax,[ebx]; push edi; push 0x12`. | Phobos (returns 0) |
+| `0x449E4F` | 6 | `Mi_Selling` undeploying (0x449C30, EBP = building), after the `UnitClass` constructor, EBX = new unit or 0. Stolen: `mov ecx,[0xA8E7AC]`. | none |
+| `0x534DBE` | 5 | Theater palettes rebuilt: drop the palette cache. Stolen: `mov ecx,0xA8B238`. | none |
+| `0x67E42E` | 5 | SaveGame, end of stream, ESI = IStream: appends the block. Stolen: `test eax,eax; pop edi; pop esi; pop ebp`. Kratos declares 13 here; Antares 5, as we do. | Antares, GiftBoxHost |
+| `0x67F7C8` | 5 | LoadGame, end of stream, ESI = IStream: reads it. Stolen: `pop edi; pop esi; pop ebp; mov al,1`. | Antares, GiftBoxHost |
+| `0x685659` | 10 | `ClearClasses`: resets the runtime state (IntelExt's seat). | Antares, Phobos, IntelExt, DoctrineExt, DossierExt, WarZoneExt |
+
+Checks run on the seats (2026-10-30): disassembly of every stolen window and
+the registers each handler reads; `check_hook_bounds --exe`,
+`check_hook_overlap` and the encyclopedia's `check_hook_chain` are clean; a
+`.syhks00` sweep of every DLL in Rex's game dir gives the sharing column.
+
 ## Status
 
 - Host-tested:
@@ -240,3 +326,8 @@ See the module docstring of `tools/distance_bake.py` and the tag reference.
 - Open: with the test installed the engine counted 820 sounds against 821
   distinct `[SoundList]` names. `CheckSoundList` logs which name was lost
   (see CHANGELOG).
+- `ColorRules=` (2026-10-30): the cycle and precedence rules are host-tested
+  (348 checks), and the CI build is clean. The hook seats are verified
+  statically, as listed above. **Not yet seen in game.** The proof will be
+  Rex's debug.log showing the vtable-wrap line and the per-object decisions
+  for the test snippet in docs/colorrules.md.

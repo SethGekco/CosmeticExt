@@ -169,6 +169,7 @@ namespace
 	constexpr int LogBudgetPerGame = 40;
 	bool LoggedTable = false;
 	std::unordered_set<std::string> Warned;
+	std::unordered_set<int> NoRemapWarned; // by PaletteNames index; checked while drawing
 
 	// --- small helpers -------------------------------------------------------
 
@@ -642,14 +643,14 @@ namespace
 		MaybePrune();
 
 		Birth birth;
-		if (auto const it = Pending.find(uid); it != Pending.end())
+		if (auto const pending = Pending.find(uid); pending != Pending.end())
 		{
 			// A paradrop passenger landing.
 			birth.via = "superweapon drop";
-			birth.source = FindRule(it->second.rule);
-			birth.invoker = HouseAt(it->second.house);
-			birth.sourceId = it->second.source;
-			Pending.erase(it);
+			birth.source = FindRule(pending->second.rule);
+			birth.invoker = HouseAt(pending->second.house);
+			birth.sourceId = pending->second.source;
+			Pending.erase(pending);
 		}
 		else if (auto const pCtx = Top())
 		{
@@ -678,9 +679,9 @@ namespace
 				birth.source = FindRule(pCfg->freeUnitRule);
 			}
 		}
-		else if (auto const it = DeployChildren.find(uid); it != DeployChildren.end())
+		else if (auto const deploy = DeployChildren.find(uid); deploy != DeployChildren.end())
 		{
-			auto const& rec = it->second;
+			auto const& rec = deploy->second;
 			birth.via = "deploy";
 			birth.invoker = rec.owner;
 			birth.sourceId = rec.source;
@@ -691,7 +692,7 @@ namespace
 				if (rec.hasState)
 					birth.inherited = rec.state;
 			}
-			DeployChildren.erase(it);
+			DeployChildren.erase(deploy);
 		}
 		else
 		{
@@ -1029,6 +1030,7 @@ namespace
 		Books.clear();
 		PaletteNames.clear();
 		PaletteCache.clear();
+		NoRemapWarned.clear();
 		Pending.clear();
 		Deliveries.clear();
 		DeployChildren.clear();
@@ -1366,8 +1368,8 @@ namespace
 			return pScheme->LightConvert;
 
 		// The palette has no remap for this colour: show it in the owner's.
-		if (st.palette >= 0)
-			WarnOnce("noremap:" + PaletteNames[static_cast<size_t>(st.palette)], "[CosmeticExt] ColorRules: PaletteSwitch=%s has no remap for that colour; showing the owner's.\n", PaletteNames[static_cast<size_t>(st.palette)].c_str());
+		if (st.palette >= 0 && NoRemapWarned.insert(st.palette).second)
+			Debug::Log("[CosmeticExt] ColorRules: PaletteSwitch=%s has no remap for that colour; showing the owner's.\n", PaletteNames[static_cast<size_t>(st.palette)].c_str());
 		if (auto const pScheme = SchemeAt(pSchemes, pOwner->ColorSchemeIndex); pScheme && pScheme->LightConvert)
 			return pScheme->LightConvert;
 		return vanilla;
