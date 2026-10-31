@@ -1,7 +1,16 @@
-#include "ColorRules.h"
+// Engine glue for the rulesmd.ini ColorRules= tags: per-object remap colour
+// and palette overrides. The cycle and precedence rules live in ColorModel;
+// this file owns the INI tables, the per-object state, the creation contexts
+// (factory, free unit, superweapon, deploy, attachment) and the hooks.
+//
+// Presentation only. Nothing here writes an object, a house or the rules: an
+// object's owner, and so its losses, loyalty and AI, never change. The look is
+// decided at the moment an object first enters the map, in simulation order,
+// and "random" choices are hashed, so every client in an online game draws the
+// same colours without touching the synced randomizer.
+
 #include "ColorModel.h"
 
-#include <AircraftClass.h>
 #include <BuildingClass.h>
 #include <CCINIClass.h>
 #include <ColorScheme.h>
@@ -9,12 +18,10 @@
 #include <FootClass.h>
 #include <Fundamentals.h>
 #include <HouseClass.h>
-#include <InfantryClass.h>
 #include <SuperClass.h>
 #include <SuperWeaponTypeClass.h>
 #include <TechnoClass.h>
 #include <TechnoTypeClass.h>
-#include <UnitClass.h>
 
 #include <Utilities/Macro.h>
 #include <Utilities/Debug.h>
@@ -22,6 +29,7 @@
 #include <Windows.h>
 #include <objidl.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstring>
@@ -146,6 +154,16 @@ namespace
 		int frame;
 		bool wasReady;
 		std::vector<TechnoClass*> collected; // Super: born inside the launch
+		std::vector<std::pair<TechnoClass*, TechnoClass*>> followers; // Super: (child, collected parent)
+	};
+
+	// An object between our Unlimbo seat and the end of TechnoClass::Unlimbo.
+	// Whatever is born in that span is part of it: TechnoAttachmentExt
+	// unlimbos an object's attachments from the same function's tail.
+	struct Entering
+	{
+		TechnoClass* who;
+		int frame;
 	};
 
 	std::unordered_map<DWORD, ObjState> States;
@@ -157,6 +175,7 @@ namespace
 	std::unordered_map<DWORD, DeployRec> DeployChildren; // by the new object's UniqueID
 	LastProduct Product;
 	std::vector<Ctx> Stack;
+	std::vector<Entering> EnteringMap;
 
 	// Palette schemes from ColorScheme::GeneratePalette, by PaletteNames
 	// index. The engine frees them when a theater rebuilds its palettes, so
@@ -167,6 +186,11 @@ namespace
 
 	int LogBudget = 0;
 	constexpr int LogBudgetPerGame = 40;
+	int KickLogBudget = 0;
+	constexpr int KickLogBudgetPerGame = 6;
+	int DrawLogBudget = 0;
+	constexpr int DrawLogBudgetPerGame = 20;
+	std::unordered_set<DWORD> DrawLogged; // at most DrawLogBudgetPerGame entries
 	bool LoggedTable = false;
 	std::unordered_set<std::string> Warned;
 	std::unordered_set<int> NoRemapWarned; // by PaletteNames index; checked while drawing
@@ -632,6 +656,82 @@ namespace
 		return matched;
 	}
 
+	// The innermost object still inside TechnoClass::Unlimbo, if any.
+	TechnoClass* EnteringParent()
+	{
+		const int now = Unsorted::CurrentFrame;
+		while (!EnteringMap.empty() && EnteringMap.back().frame != now)
+			EnteringMap.pop_back(); // an exit we never saw
+		return EnteringMap.empty() ? nullptr : EnteringMap.back().who;
+	}
+
+	void BeginEntering(TechnoClass* pThis)
+	{
+		EnteringParent();
+		EnteringMap.push_back(Entering { pThis, Unsorted::CurrentFrame });
+	}
+
+	void EndEntering(TechnoClass* pThis)
+	{
+		for (size_t i = EnteringMap.size(); i-- > 0;)
+		{
+			if (EnteringMap[i].who == pThis)
+			{
+				EnteringMap.resize(i);
+				return;
+			}
+		}
+	}
+
+	// Born while pParent was entering the map, so part of it (a
+	// TechnoAttachmentExt attachment, say). No context's rule reaches it and
+	// it takes no cycle step from one. Its own ColorRules= wins; without one
+	// it wears the parent's look.
+	void ResolveAttached(TechnoClass* pThis, TechnoClass* pParent)
+	{
+		Birth birth;
+		birth.via = "attached";
+		birth.invoker = pParent->Owner;
+		birth.sourceId = (4ull << 32) | pParent->UniqueID;
+		auto const pCfg = FindType(pThis->GetTechnoType());
+		if (!pCfg || !FindRule(pCfg->rule))
+		{
+			if (!StateOf(pParent->UniqueID, birth.inherited))
+				return; // the parent has no look to share
+			birth.inherit = true;
+		}
+		Resolve(pThis, birth);
+	}
+
+	// A launch decides its objects when it returns, so a child of one waits too.
+	bool DecidedAtClose(const Ctx& ctx, const TechnoClass* pParent)
+	{
+		if (std::find(ctx.collected.begin(), ctx.collected.end(), pParent) != ctx.collected.end())
+			return true;
+		for (auto const& follower : ctx.followers)
+		{
+			if (follower.first == pParent)
+				return true;
+		}
+		return false;
+	}
+
+	// The object a factory is producing? Sidebar production belongs to the
+	// house (HouseClass::Begin_Production, 0x4FA4F5) and never sets
+	// BuildingClass::Factory, which only a building's own factory fills. So
+	// every factory is asked; a clone or a free unit is no factory's object.
+	bool IsFactoryProduct(const BuildingClass* pBuilding, const TechnoClass* pThis)
+	{
+		if (pBuilding->Factory && pBuilding->Factory->Object == pThis)
+			return true;
+		for (auto const pFactory : FactoryClass::Array)
+		{
+			if (pFactory && pFactory->Object == pThis)
+				return true;
+		}
+		return false;
+	}
+
 	// The object is entering the map for the first time: decide its look.
 	void OnUnlimbo(TechnoClass* pThis)
 	{
@@ -641,6 +741,15 @@ namespace
 		if (!Seen.insert(uid).second)
 			return;
 		MaybePrune();
+
+		if (TechnoClass* const pParent = EnteringParent(); pParent && pParent != pThis)
+		{
+			if (auto const pCtx = Top(); pCtx && pCtx->kind == CtxKind::Super && DecidedAtClose(*pCtx, pParent))
+				pCtx->followers.emplace_back(pThis, pParent);
+			else
+				ResolveAttached(pThis, pParent);
+			return;
+		}
 
 		Birth birth;
 		if (auto const pending = Pending.find(uid); pending != Pending.end())
@@ -704,6 +813,17 @@ namespace
 
 	// BuildingClass::KickOutUnit entry: factory products and clones are
 	// decided here, before the exit (and its Unlimbo) runs.
+	// The first kick-outs of a game, whatever they turn out to be, so a
+	// factory rule that never fires can be told from one never reached.
+	void LogKickOut(const BuildingClass* pBuilding, const TechnoClass* pThis, const char* what)
+	{
+		if (KickLogBudget <= 0)
+			return;
+		--KickLogBudget;
+		Debug::Log("[CosmeticExt] ColorRules: kick-out of %s #%u from %s: %s\n",
+			pThis->GetTechnoType()->ID, pThis->UniqueID, pBuilding->Type ? pBuilding->Type->ID : "?", what);
+	}
+
 	void OnKickOut(BuildingClass* pBuilding, TechnoClass* pThis)
 	{
 		if (!Active || !pBuilding || !pThis || !pThis->GetTechnoType())
@@ -718,8 +838,9 @@ namespace
 		birth.invoker = pBuilding->Owner;
 		birth.sourceId = BuildingSource(pBuilding);
 
-		if (pBuilding->Factory && pBuilding->Factory->Object == pThis)
+		if (IsFactoryProduct(pBuilding, pThis))
 		{
+			LogKickOut(pBuilding, pThis, "factory product");
 			birth.via = "factory";
 			if (pCfg)
 				birth.source = FindRule(pCfg->factoryRule);
@@ -735,12 +856,16 @@ namespace
 		}
 
 		if (auto const pCtx = Top(); pCtx && pCtx->kind == CtxKind::GrandOpening && pCtx->who == pBuilding)
-			return; // a free unit leaving its building: OnUnlimbo decides
+		{
+			LogKickOut(pBuilding, pThis, "free unit, decided as it unlimbos");
+			return;
+		}
 
 		if (Product.frame == now && Product.uid != uid && Product.baseType == BaseId(pThis->GetTechnoType()->ID))
 		{
 			// A cloning vat copying the product kicked out in this call.
 			// The factory's rule stays with the factory (Rex, 2026-10-30).
+			LogKickOut(pBuilding, pThis, "clone of the product");
 			birth.via = "clone";
 			if (pCfg && pCfg->cloningInherit)
 			{
@@ -751,7 +876,9 @@ namespace
 			Seen.insert(uid);
 			MaybePrune();
 			Resolve(pThis, birth);
+			return;
 		}
+		LogKickOut(pBuilding, pThis, "no factory's product, decided as it unlimbos");
 	}
 
 	void OpenSuper(HouseClass* pHouse, SuperClass* pSuper)
@@ -798,6 +925,8 @@ namespace
 			}
 			Resolve(pThis, birth);
 		}
+		for (auto const& [pChild, pParent] : ctx.followers)
+			ResolveAttached(pChild, pParent);
 
 		// Antares clears IsReady only when the launch really happened
 		// (SuperClass_ClickFire); PreClick/PostClick weapons stay ready.
@@ -1037,7 +1166,11 @@ namespace
 		DeployChildren.clear();
 		Product = LastProduct { };
 		Stack.clear();
+		EnteringMap.clear();
+		DrawLogged.clear();
 		LogBudget = LogBudgetPerGame;
+		KickLogBudget = KickLogBudgetPerGame;
+		DrawLogBudget = DrawLogBudgetPerGame;
 		LoggedTable = false;
 	}
 
@@ -1314,37 +1447,26 @@ namespace
 			static_cast<unsigned>(States.size()), static_cast<unsigned>(Books.size()));
 	}
 
-	// --- the draw side: TechnoClass::GetRemapColour --------------------------
+	// --- the draw side: TechnoClass::GetRemapColour ---------------------------
 
-	using RemapFn = LightConvertClass* (__fastcall*)(const TechnoClass*, void*);
-
-	struct Slot
+	// The scheme pThis is drawn with, or nullptr for the engine's own answer.
+	// Its LightConvert is what GetRemapColour returns.
+	ColorScheme* StyledScheme(const TechnoClass* pThis)
 	{
-		uintptr_t vtable;
-		const char* name;
-		RemapFn original;
-	};
-
-	constexpr uintptr_t RemapSlot = 0x1E4;
-	constexpr uintptr_t VanillaRemap = 0x705D70;
-
-	Slot Slots[] = {
-		{ UnitClass::AbsVTable, "UnitClass", nullptr },
-		{ InfantryClass::AbsVTable, "InfantryClass", nullptr },
-		{ BuildingClass::AbsVTable, "BuildingClass", nullptr },
-		{ AircraftClass::AbsVTable, "AircraftClass", nullptr },
-	};
-
-	LightConvertClass* Restyle(const TechnoClass* pThis, const ObjState& st, LightConvertClass* vanilla)
-	{
+		if (States.empty() || !pThis)
+			return nullptr;
+		auto const it = States.find(pThis->UniqueID);
+		if (it == States.end())
+			return nullptr;
+		const ObjState& st = it->second;
 		HouseClass* const pOwner = pThis->Owner;
 		if (!pOwner)
-			return vanilla;
+			return nullptr;
 
 		// A disguise the local player can't see through keeps the vanilla
 		// colour, which is the disguise's.
 		if (HouseClass::CurrentPlayer && pThis->IsDisguised() && !pThis->IsClearlyVisibleTo(HouseClass::CurrentPlayer))
-			return vanilla;
+			return nullptr;
 
 		const int scheme = st.scheme >= 0 ? st.scheme : pOwner->ColorSchemeIndex;
 		const DynamicVectorClass<ColorScheme*>* pSchemes = nullptr;
@@ -1352,11 +1474,11 @@ namespace
 		{
 			pSchemes = PaletteSchemes(st.palette);
 			if (!pSchemes)
-				return vanilla;
+				return nullptr;
 		}
 		else if (st.scheme < 0)
 		{
-			return vanilla;
+			return nullptr;
 		}
 		else if (auto const pType = pThis->GetTechnoType())
 		{
@@ -1365,89 +1487,34 @@ namespace
 		if (!pSchemes)
 			pSchemes = &ColorScheme::Array;
 
-		if (auto const pScheme = SchemeAt(pSchemes, scheme); pScheme && pScheme->LightConvert)
-			return pScheme->LightConvert;
-
-		// The palette has no remap for this colour: show it in the owner's.
-		if (st.palette >= 0 && NoRemapWarned.insert(st.palette).second)
-			Debug::Log("[CosmeticExt] ColorRules: PaletteSwitch=%s has no remap for that colour; showing the owner's.\n", PaletteNames[static_cast<size_t>(st.palette)].c_str());
-		if (auto const pScheme = SchemeAt(pSchemes, pOwner->ColorSchemeIndex); pScheme && pScheme->LightConvert)
-			return pScheme->LightConvert;
-		return vanilla;
-	}
-
-	LightConvertClass* __fastcall GetRemapColour(const TechnoClass* pThis, void* edx)
-	{
-		const uintptr_t vtable = *reinterpret_cast<const uintptr_t*>(pThis);
-		RemapFn original = reinterpret_cast<RemapFn>(VanillaRemap);
-		for (auto const& slot : Slots)
+		ColorScheme* pScheme = SchemeAt(pSchemes, scheme);
+		if ((!pScheme || !pScheme->LightConvert) && st.palette >= 0)
 		{
-			if (slot.vtable == vtable && slot.original)
-			{
-				original = slot.original;
-				break;
-			}
+			// The palette has no remap for this colour: show it in the owner's.
+			if (NoRemapWarned.insert(st.palette).second)
+				Debug::Log("[CosmeticExt] ColorRules: PaletteSwitch=%s has no remap for that colour; showing the owner's.\n", PaletteNames[static_cast<size_t>(st.palette)].c_str());
+			pScheme = SchemeAt(pSchemes, pOwner->ColorSchemeIndex);
 		}
+		if (!pScheme || !pScheme->LightConvert)
+			return nullptr;
 
-		LightConvertClass* const vanilla = original(pThis, edx);
-		if (States.empty())
-			return vanilla;
-		auto const it = States.find(pThis->UniqueID);
-		return it == States.end() ? vanilla : Restyle(pThis, it->second, vanilla);
-	}
-
-	uintptr_t* SlotAddress(const Slot& slot)
-	{
-		return reinterpret_cast<uintptr_t*>(slot.vtable + RemapSlot);
-	}
-
-	bool LoggedPatch = false;
-
-	void LogPatch()
-	{
-		LoggedPatch = true;
-		int ours = 0;
-		for (auto const& slot : Slots)
+		if (DrawLogBudget > 0 && DrawLogged.insert(pThis->UniqueID).second)
 		{
-			const uintptr_t now = *SlotAddress(slot);
-			if (now == reinterpret_cast<uintptr_t>(&GetRemapColour))
-			{
-				++ours;
-				if (reinterpret_cast<uintptr_t>(slot.original) != VanillaRemap)
-					Debug::Log("[CosmeticExt] ColorRules: %s::GetRemapColour was already 0x%08X before the wrap (expected 0x%08X); wrapped anyway.\n",
-						slot.name, static_cast<unsigned>(reinterpret_cast<uintptr_t>(slot.original)), static_cast<unsigned>(VanillaRemap));
-			}
-			else
-			{
-				Debug::Log("[CosmeticExt] ColorRules: %s::GetRemapColour slot holds 0x%08X, not the wrap; that class shows vanilla colours.\n",
-					slot.name, static_cast<unsigned>(now));
-			}
+			--DrawLogBudget;
+			auto const pType = pThis->GetTechnoType();
+			Debug::Log("[CosmeticExt] ColorRules: drawing %s #%u in colour %s, palette %s\n",
+				pType ? pType->ID : "?", pThis->UniqueID, SchemeName(st.scheme),
+				st.palette >= 0 ? PaletteNames[static_cast<size_t>(st.palette)].c_str() : "own");
 		}
-		Debug::Log("[CosmeticExt] ColorRules: GetRemapColour wrapped in %d of 4 techno vtables.\n", ours);
-	}
-}
-
-void ColorRules::PatchVtables()
-{
-	for (auto& slot : Slots)
-	{
-		auto const pSlot = SlotAddress(slot);
-		DWORD protect = 0;
-		if (!VirtualProtect(pSlot, sizeof(*pSlot), PAGE_EXECUTE_READWRITE, &protect))
-			continue;
-		if (*pSlot != reinterpret_cast<uintptr_t>(&GetRemapColour))
-		{
-			slot.original = reinterpret_cast<RemapFn>(*pSlot);
-			*pSlot = reinterpret_cast<uintptr_t>(&GetRemapColour);
-		}
-		VirtualProtect(pSlot, sizeof(*pSlot), protect, &protect);
+		return pScheme;
 	}
 }
 
 // ---------------------------------------------------------------------------
 // Hooks. Seats and register maps verified by disassembling gamemd-spawn.exe;
-// every one returns 0, and none of the stolen windows holds a relative
-// branch or call. Sharing per the YR Hook Encyclopedia registry and the
+// every one returns 0 except the two GetRemapColour exits, which nobody
+// else hooks, and none of the stolen windows holds a relative branch or
+// call. Sharing per the YR Hook Encyclopedia registry and the
 // deployed DLLs' .syhks00 sections (2026-10-30). Full write-up: DESIGN.md.
 // ---------------------------------------------------------------------------
 
@@ -1456,18 +1523,38 @@ void ColorRules::PatchVtables()
 DEFINE_HOOK(0x668F6A, RulesClass_Read_File_CosmeticExt_ColorRules, 0x5)
 {
 	GET(CCINIClass*, pINI, ESI);
-	if (!LoggedPatch)
-		LogPatch();
 	ReadRulesPass(pINI);
 	return 0;
 }
 
 // TechnoClass::Unlimbo, right after ObjectClass::Unlimbo succeeded.
-// ESI = this. Stolen: mov eax,[edi]; push 1; cdq.
+// ESI = this. Stolen: mov eax,[edi]; push 1; cdq. From here to the two
+// exits below, whatever else unlimbos is part of this object.
 DEFINE_HOOK(0x6F6CBE, TechnoClass_Unlimbo_CosmeticExt_ColorRules, 0x5)
 {
 	GET(TechnoClass*, pThis, ESI);
 	OnUnlimbo(pThis);
+	BeginEntering(pThis);
+	return 0;
+}
+
+// TechnoClass::Unlimbo's early success exit, ESI = this. Stolen: pop edi;
+// mov al,1; pop esi; add esp,0x18. Shared with Antares (TechnoClass_Put_1,
+// returns 0).
+DEFINE_HOOK(0x6F6D0E, TechnoClass_Unlimbo_CosmeticExt_ColorRules_Done1, 0x7)
+{
+	GET(TechnoClass*, pThis, ESI);
+	EndEntering(pThis);
+	return 0;
+}
+
+// TechnoClass::Unlimbo's last exit, ESI = this. Stolen: mov al,1; pop esi;
+// add esp,0x18. Shared with Antares, TechnoAttachmentExt (which unlimbos
+// the attachments here) and SquadExt, all returning 0 and all ahead of us.
+DEFINE_HOOK(0x6F6F20, TechnoClass_Unlimbo_CosmeticExt_ColorRules_Done2, 0x6)
+{
+	GET(TechnoClass*, pThis, ESI);
+	EndEntering(pThis);
 	return 0;
 }
 
@@ -1540,6 +1627,38 @@ DEFINE_HOOK(0x449E4F, BuildingClass_Mi_Selling_CosmeticExt_ColorRules, 0x6)
 	GET(TechnoClass*, pUnit, EBX);
 	if (pUnit)
 		RecordDeploy(pBuilding, pUnit);
+	return 0;
+}
+
+// TechnoClass::GetRemapColour (0x705D70, virtual slot 0x1E4), the exit for
+// a type with art Palette=. ESI = this. Hooked inside the function, not
+// wrapped in the vtable, because Phobos calls 0x705D70 directly for SHP
+// vehicles and a few other draws. Stolen: mov edx,[eax+4];
+// mov eax,[edx+edi*4]. 0x705D98 is the function's own tail: pop edi;
+// pop esi; mov eax,[eax+0x30C]; ret -- so EAX = our scheme returns its
+// LightConvert. Phobos' hook at 0x705D74 resumes at 0x705D7C, before both.
+DEFINE_HOOK(0x705D92, TechnoClass_GetRemapColour_CosmeticExt_ColorRules_TypePalette, 0x6)
+{
+	GET(TechnoClass*, pThis, ESI);
+	if (auto const pScheme = StyledScheme(pThis))
+	{
+		R->EAX(pScheme);
+		return 0x705D98; // CHAIN-OK: no other framework hooks 0x705D92
+	}
+	return 0;
+}
+
+// The house-colour exit (also taken when a disguise is seen through).
+// ESI = this. Stolen: mov eax,[0xB054D4]. 0x705DF1 is the tail: pop edi;
+// pop esi; mov eax,[ecx+0x30C]; ret -- so ECX = our scheme.
+DEFINE_HOOK(0x705DE9, TechnoClass_GetRemapColour_CosmeticExt_ColorRules_Owner, 0x5)
+{
+	GET(TechnoClass*, pThis, ESI);
+	if (auto const pScheme = StyledScheme(pThis))
+	{
+		R->ECX(pScheme);
+		return 0x705DF1; // CHAIN-OK: no other framework hooks 0x705DE9
+	}
 	return 0;
 }
 

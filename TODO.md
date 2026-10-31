@@ -6,15 +6,22 @@ nothing that Rex hasn't.
 
 ---
 
-## 1. Remap-colour and palette overrides (`ColorRules=`) — built 2026-10-30, not yet seen in game
+## 1. Remap-colour and palette overrides (`ColorRules=`) — built 2026-10-30, first game showed three faults (fixed, not yet seen in game)
 
 **Status (2026-10-30).** Built as specified below: `src/Color/`, host tests
 in `tests/test_color_model.cpp`, reference and a test snippet in
 [docs/colorrules.md](docs/colorrules.md), engine notes in DESIGN.md. The
 docs list every *Reading* and *Builder's choice*. Left to do:
 
-- Rex runs the test snippet. Proof is his debug.log showing the
-  `GetRemapColour wrapped in 4 of 4` line and the per-object decisions.
+- First game (Rex, 2026-10-30, Blockade): "Paradrop definitely changes
+  the pallet, I didn't see my color be initially dark red for anything. I
+  had units built from the allied warfactory, they weren't yellow." Fixed
+  since: factory products were never recognised (sidebar production leaves
+  `BuildingClass::Factory` empty), CMIN's attached USAGUN counted as a
+  second free unit, and Phobos' direct `GetRemapColour` calls skipped the
+  vtable wrap (now hooks inside the function). See DESIGN.md, Status.
+- Rex runs the test snippet again. Proof is war-factory units in yellow on
+  screen, and `(factory)`, `(attached)` and `drawing ...` lines in debug.log.
 - Check in game: a save and a load restore the colours (`saved ...` and
   `restored ...` lines); a paradrop plane keeps its own colour while its
   troops take the rule; a deployed MCV follows its own type's rule.

@@ -7,6 +7,44 @@
 
 ## [unreleased] — 2026-10-30
 
+### Fixed — ColorRules faults from Rex's first game
+- Rex played Blockade with the test snippet (22:32). His words: "Paradrop
+  definitely changes the pallet, I didn't see my color be initially dark
+  red for anything. I had units built from the allied warfactory, they
+  weren't yellow." His debug.log had no `(factory)` line at all, and CMIN's
+  attached USAGUN logged as a second `(free unit)`.
+- **`Factory.ColorRules` never fired.** The product test was
+  `building->Factory->Object == object`. Sidebar production lives on the
+  house (`HouseClass::Begin_Production`, `0x4FA4F5`), which never sets
+  `BuildingClass::Factory`, so no unit a human built ever matched. Now any
+  factory in `FactoryClass::Array` whose `Object` is the unit counts. Why
+  it matters beyond this DLL: CloningExt's `.construct` profile uses the
+  same test (see the encyclopedia note).
+- **Attachments were taken for free units.** TechnoAttachmentExt unlimbos
+  an object's attachments inside the object's own `Unlimbo`, so CMIN's
+  USAGUN was born inside the refinery's Grand_Opening window and took a
+  step of its cycle. New hooks at `Unlimbo`'s two success exits
+  (`0x6F6D0E`, `0x6F6F20`) bracket "still entering the map". Whatever is
+  born in that span is part of the parent: it ignores factory, free-unit
+  and superweapon rules, takes no cycle step, and wears the parent's look
+  unless its own type has `ColorRules=`. Logged as `(attached)`.
+- **Phobos' direct calls skipped the colour.** Phobos calls
+  `GetRemapColour` (`0x705D70`) directly, not through the vtable, in its
+  SHP-vehicle blitter fix and two other places, so the vtable wrap missed
+  the Terror Drone, Squid and Dolphin. The wrap is gone. Two hooks at the
+  function's art-palette and house-colour exits (`0x705D92`, `0x705DE9`)
+  hand its own tail our scheme instead. Nobody else hooks either address.
+  `ColorRules.h` and the DllMain call went with the wrap.
+- **Rex's "no dark red" is most likely not a draw fault.** The paradrop's
+  palette came through the same path, and the voxel blits call the same
+  function. The only units meant to show a colour were his MCV, which he
+  deployed at once, and his first miner, LightBlue beside his DarkBlue.
+  To settle it, the first 20 objects drawn in a stored look are now logged
+  (`drawing AMCV #… in colour DarkRed`), and so are the first 6 kick-outs
+  of each game, whatever they turn out to be.
+- Not yet seen in game. `check_hook_bounds --exe` and `check_hook_overlap`
+  are clean with the four new hooks.
+
 ### Deployed — the ColorRules test snippet
 - Rex asked for it on 2026-10-30. The new `tools/colorrules_test.py install`
   put the docs/colorrules.md snippet into the live game's rulesmd.ini:

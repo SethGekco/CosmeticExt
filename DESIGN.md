@@ -237,22 +237,30 @@ reference is [docs/colorrules.md](docs/colorrules.md).
 | Address | What |
 |---|---|
 | `0x705D70` | `TechnoClass::GetRemapColour`, virtual slot `0x1E4`. If the type has an art `Palette=` (`TechnoTypeClass+0xDF0`, a scheme vector), it returns `Palette->Items[Owner->ColorSchemeIndex]->LightConvert` and ignores disguises. Otherwise, when the local player can't see through a disguise (`IsClearlyVisibleTo`, slot `0x440`), it uses the disguise house's scheme (`GetDisguiseHouse(true)`, slot `0xD0`). Otherwise `ColorScheme::Array[Owner->ColorSchemeIndex]->LightConvert`. |
-| `0x7F5E54`, `0x7EB23C`, `0x7E40A0`, `0x7E2488` | The slot in the Unit, Infantry, Building and Aircraft vtables (`AbsVTable + 0x1E4`). All four hold `0x705D70`. No deployed DLL references these addresses. The abstract classes' slots (`0x7E8E78`, `0x7F4B44`) are never called on a live object, so they are left alone. |
+| `0x705D92`, `0x705DC5`, `0x705DE9` | Its three exits: art `Palette=`, disguise, house colour. Each ends in the same tail, `pop edi; pop esi; mov eax,[scheme+0x30C]; ret` (`0x705D98` with the scheme in EAX, `0x705DF1` with it in ECX). ESI is `this` up to the tail. |
+| callers | The engine calls it through the slot: voxel blits (`0x707194`, `0x707505`), SHP (`0x705F81`), buildings and a few more, 14 sites. But Phobos calls `0x705D70` directly (YRpp's `GetDrawer`, a `JMP_THIS`) in three places, among them its SHP-vehicle blitter fix at `0x73B2A2`. A vtable wrap misses those: the Terror Drone, Squid and Dolphin kept the owner's colour. |
 | `0xB054D0` | `ColorScheme::Array`. Each `[Colors]` entry appears twice: once with `ShadeCount` 1 and once with 53. A house's `ColorSchemeIndex` (`HouseClass+0x16054`) points at the 53-shade one. The engine's name lookup (`0x474A90`) takes the first match whose `ShadeCount` is not 1, and so do we. |
 | `0x6263D0` | `ColorScheme::GeneratePalette(char*)`, what art `Palette=` uses. Its loader (`0x627590`) builds `<name>` + the theater's extension + `.PAL`, upper-cased, so `desert01` loads `DESERT01TEM.PAL` in temperate. It returns one scheme per colour, cached by name. A missing file gives no vector. |
 | `0x534DBE` | The theater has rebuilt its palettes, which frees the generated schemes. We drop our cached pointers here. |
+| `0x4FA4F5` | `HouseClass::Begin_Production` creates the house's `FactoryClass` for sidebar production. It never touches `BuildingClass::Factory` (`+0x524`). That field is set only by a building's own factory (`0x450387`) and, inside `KickOutUnit`, while a busy factory lends it to an idle twin (`0x44451F`–`0x444552`). So `building->Factory->Object == object` misses every unit a human builds. `FactoryClass::Array` (`0xA83E30`) holds every factory, house-owned or not. |
+| `0x6F6D0E`, `0x6F6F20` | `TechnoClass::Unlimbo`'s two success exits after our seat, ESI = this. TechnoAttachmentExt creates an object's attachments in its constructor (`0x6F42F7`) and unlimbos them from its handler at `0x6F6F20`, so a child is born inside its parent's `Unlimbo`. |
 
 ### Design
 
-- **The draw side is a vtable wrap, not a hook.** DllMain swaps slot
-  `0x1E4` in the four concrete techno vtables for a wrapper. The wrapper
-  calls the original first, so Phobos' hook inside the function
-  (`0x705D74`) still runs. Then, only for an object with a stored look, it
-  picks the scheme itself. No stolen bytes, and no chain to truncate. The
-  first rules read logs how many slots still hold the wrapper.
+- **The draw side hooks the function's exits.** For an object with a
+  stored look, the hooks at the art-palette and house-colour exits hand the
+  function's own tail our scheme, so it returns that scheme's LightConvert.
+  The disguise exit is left alone. Hooking the function, not its vtable
+  slot, catches Phobos' direct calls too. Phobos' own hook inside it
+  (`0x705D74`) resumes at `0x705D7C`, before both of ours. The first build
+  wrapped the slot instead; it worked for voxels and infantry and missed
+  Phobos' callers. The first 20 objects a game draws in a stored look are
+  logged (`drawing ... in colour ...`).
 - **The look is decided once, at a simulation event.** The events are the
   first `Unlimbo`, and the `KickOutUnit` entry for factory products and
-  clones. They happen in the same order on every client, so a cycle hands
+  clones. A factory product is any factory's `Object`, found by scanning
+  `FactoryClass::Array`; the first build tested `building->Factory`, which
+  sidebar production never sets, so no human-built unit ever matched. They happen in the same order on every client, so a cycle hands
   out the same colours everywhere. Hashes never take object IDs, which differ
   between clients (`ScenarioClass::UniqueID` starts from a salt). A Source
   scope keys on the order in which sources first appear instead.
@@ -270,6 +278,14 @@ reference is [docs/colorrules.md](docs/colorrules.md).
   records the parent against the new object until that object unlimbos.
   Ares `UnitDelivery` places objects after a deferment, outside any call we
   can see, so it is matched by type in a frame window around the due frame.
+- **What is born while its parent enters the map is part of the parent.**
+  Our `Unlimbo` seat pushes the object; both success exits pop it. An object
+  that unlimbos in between (a TechnoAttachmentExt attachment) ignores every
+  context and takes no cycle step: its own `ColorRules=` wins, or it wears
+  the parent's look. The first build let the Grand_Opening window capture
+  CMIN's attached USAGUN as a second free unit, which took a step of the
+  refinery's cycle. A launch decides its objects at the end, so a child of
+  one waits for the parent there.
   The launch only counts when `IsReady` went from true to false, because
   Antares clears it only when the weapon really fired (`SuperClass_ClickFire`,
   read in Antares-src; classic Ares not checked).
@@ -297,13 +313,18 @@ reference is [docs/colorrules.md](docs/colorrules.md).
 
 ### Hooks
 
-All return 0. None of the stolen windows holds a relative branch or call.
+All return 0 except the two `GetRemapColour` exits, which nobody else
+hooks. None of the stolen windows holds a relative branch or call.
 
 | Address | Size | What it does | Shared with (deployed) |
 |---|---|---|---|
-| `0x668F6A` | 5 | `Read_File` tail, ESI = this pass's INI: reads the tags, logs the vtable wrap once. Stolen: `mov eax,[0xA8B238]`. | Phobos, BuildQueueExt, WeatherExt, Country_Extension4, YRAggressiveStance |
-| `0x6F6CBE` | 5 | `TechnoClass::Unlimbo` after `ObjectClass::Unlimbo` succeeded, ESI = this: the birth point. Stolen: `mov eax,[edi]; push 1; cdq`. | none |
-| `0x443C60` | 6 | `BuildingClass::KickOutUnit` entry, ECX = building, `[esp+4]` = object: factory products (`Factory->Object == object`) and clones. Stolen: `sub esp,0x130`. | CloningExt, GiftBoxHost (both return 0) |
+| `0x668F6A` | 5 | `Read_File` tail, ESI = this pass's INI: reads the tags. Stolen: `mov eax,[0xA8B238]`. | Phobos, BuildQueueExt, WeatherExt, Country_Extension4, YRAggressiveStance |
+| `0x6F6CBE` | 5 | `TechnoClass::Unlimbo` after `ObjectClass::Unlimbo` succeeded, ESI = this: the birth point; marks the object as entering the map. Stolen: `mov eax,[edi]; push 1; cdq`. | none |
+| `0x6F6D0E` | 7 | `Unlimbo`'s early success exit, ESI = this: done entering. Stolen: `pop edi; mov al,1; pop esi; add esp,0x18`. | Antares (returns 0) |
+| `0x6F6F20` | 6 | `Unlimbo`'s last exit, ESI = this: done entering, after TechnoAttachmentExt unlimboed the attachments. Stolen: `mov al,1; pop esi; add esp,0x18`. | Antares, TechnoAttachmentExt, SquadExt (all return 0) |
+| `0x705D92` | 6 | `GetRemapColour`'s art-palette exit, ESI = this: our scheme in EAX, resume at the tail `0x705D98`. Stolen: `mov edx,[eax+4]; mov eax,[edx+edi*4]`. | none |
+| `0x705DE9` | 5 | Its house-colour exit (also a seen-through disguise), ESI = this: our scheme in ECX, resume at the tail `0x705DF1`. Stolen: `mov eax,[0xB054D4]`. | none |
+| `0x443C60` | 6 | `BuildingClass::KickOutUnit` entry, ECX = building, `[esp+4]` = object: factory products (any factory's `Object`) and clones. Stolen: `sub esp,0x130`. | CloningExt, GiftBoxHost (both return 0) |
 | `0x4FAE85` | 5 | `HouseClass::Fire_SW` before `ClickFire`, EBX = house, EDI = super: opens the superweapon context and records `IsReady`. Stolen: `mov eax,[0xA83D4C]`. | none |
 | `0x4FAEED` | 5 | `Fire_SW`'s only epilogue, EDI = super: closes it. Stolen: `pop edi; pop esi; pop ebp; mov al,1`. | none |
 | `0x446AA9` | 6 | `Grand_Opening` (0x445F80, EBP = this throughout), at the `FreeUnit=` block: opens the free-unit context. Stolen: `mov ecx,[ebp+0x520]`. | none |
@@ -337,7 +358,13 @@ the registers each handler reads; `check_hook_bounds --exe`,
   distinct `[SoundList]` names. `CheckSoundList` logs which name was lost
   (see CHANGELOG).
 - `ColorRules=` (2026-10-30): the cycle and precedence rules are host-tested
-  (348 checks), and the CI build is clean. The hook seats are verified
-  statically, as listed above. **Not yet seen in game.** The proof will be
-  Rex's debug.log showing the vtable-wrap line and the per-object decisions
-  for the test snippet in docs/colorrules.md.
+  (348 checks). The hook seats are verified statically, as listed above.
+  First game (Rex, 2026-10-30, Blockade): the paradrop's palette showed, so
+  the draw side works for infantry. Three faults, fixed in the next build
+  and **not yet seen in game**: no `Factory.ColorRules` ever fired (the
+  `building->Factory` test); CMIN's attached USAGUN was taken for a second
+  free unit; Phobos' direct calls bypassed the vtable wrap. Rex saw no remap
+  colour, but the only units meant to show one were his MCV, which he
+  deployed at once, and his first miner (LightBlue beside his DarkBlue).
+  The proof for the next build: `(factory)` and `(attached)` decisions and
+  `drawing ...` lines in debug.log, and yellow war-factory units on screen.

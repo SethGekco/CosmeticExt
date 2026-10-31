@@ -56,22 +56,32 @@ ColorRules=Color_DropTest ; dropped troops: the caller's colour, terrain palette
 
 What to look for:
 
+- Your MCV is dark red until you deploy it. Look before you deploy.
+- Everything from an Allied war factory is yellow, including anything
+  attached to it.
+- Your MCV and your refineries' miners share one cycle per player: the MCV
+  took dark red, so your first miner is light blue, the next yellow, then
+  dark red again. A miner's attached turret matches the miner.
 - Map civilians (`CIV1`) in three colours.
-- MCVs, war-factory vehicles and the miners from new refineries change colour.
 - Paradropped troops look odd (terrain palette) but the plane does not.
 
 `debug/debug.log` shows what happened. Look for these lines:
 
 ```text
-[CosmeticExt] ColorRules: GetRemapColour wrapped in 4 of 4 techno vtables.
 [CosmeticExt] ColorRules: rules pass 1: 3 rule sections, 4 types and 1 superweapons name one
 [CosmeticExt] ColorRules: [Color_Cycle01] RemapColors=DarkRed,LightBlue,Yellow Pattern=0 Repeat=0 Scope=0 ...
-[CosmeticExt] ColorRules: CIV1 #1000123 (type) -> colour DarkRed, palette own
-[CosmeticExt] ColorRules: HTNK #1000456 (factory) -> colour Yellow, palette own
+[CosmeticExt] ColorRules: AMCV #1047669 (type) -> colour DarkRed, palette own
+[CosmeticExt] ColorRules: drawing AMCV #1047669 in colour DarkRed, palette own
+[CosmeticExt] ColorRules: kick-out of MTNK #1048300 from GAWEAP: factory product
+[CosmeticExt] ColorRules: MTNK #1048300 (factory) -> colour Yellow, palette own
+[CosmeticExt] ColorRules: USAGUN #1048301 (attached) -> colour Yellow, palette own
+[CosmeticExt] ColorRules: CMIN #1047984 (free unit) -> colour LightBlue, palette own
 ```
 
-The first 40 decisions of each game are logged. Saving and loading log
-`saved ...` and `restored ...` lines.
+The first 40 decisions of each game are logged, the first 20 objects drawn
+in a stored look (`drawing ...`), and the first 6 kick-outs from any
+building, whatever they turn out to be. Saving and loading log `saved ...`
+and `restored ...` lines.
 
 ## Colour rule sections
 
@@ -142,7 +152,14 @@ What can reach the object depends on how it was born:
 | a superweapon's creation | the superweapon's `ColorRules`, then its own type's |
 | a clone | the original's look if the facility has `Cloning.ColorRules.Inherit=yes`, then its own type's |
 | a deployed or packed-up object | the old object's look if the old type has `Deploy.ColorRules.Inherit=yes`, then its own type's |
+| part of another object (an attachment) | its own type's, else the parent's look |
 | anything else (map, trigger, crew, ...) | its own type's |
+
+"Part of another object" means it entered the map while its parent was
+still entering it. TechnoAttachmentExt attachments are born that way. Such
+an object ignores the factory, free-unit and superweapon rules, and it takes
+no colour from their cycles: a refinery's miner takes one step and its
+attached turret none.
 
 Only the direct source counts. A rule never passes along a chain unless an
 `Inherit` tag says so (Rex, 2026-10-30):
@@ -252,7 +269,11 @@ it, not his words. Tell me if any should change.
   rule, so the new object shows the vanilla look.
 - `Factory.ColorRules=` covers what a factory building kicks out. A
   building placed from a construction yard does not leave a factory
-  building, so `Factory.ColorRules` on a yard does nothing.
+  building, so `Factory.ColorRules` on a yard does nothing. A unit that
+  leaves through another building (BuildQueueExt's `KickOut.AltFrom`, or a
+  busy factory's twin) takes the rule of the building it leaves.
+- An attachment without its own `ColorRules=` wears its parent's look, so a
+  turret matches its hull.
 
 ## Limits
 
