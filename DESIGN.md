@@ -271,7 +271,8 @@ reference is [docs/colorrules.md](docs/colorrules.md).
   Ares `UnitDelivery` places objects after a deferment, outside any call we
   can see, so it is matched by type in a frame window around the due frame.
   The launch only counts when `IsReady` went from true to false, because
-  Ares clears it only when the weapon really fired (`SuperClass_ClickFire`).
+  Antares clears it only when the weapon really fired (`SuperClass_ClickFire`,
+  read in Antares-src; classic Ares not checked).
 - **The savegame block goes at the very end of the save,** not at Phobos'
   early pair (`0x67D32C`/`0x67E826`). CosmeticExt is last in the inject
   list, so its block is the last thing in the file. A save made without

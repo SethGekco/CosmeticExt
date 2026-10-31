@@ -799,7 +799,8 @@ namespace
 			Resolve(pThis, birth);
 		}
 
-		// Ares clears IsReady when the launch really happened.
+		// Antares clears IsReady only when the launch really happened
+		// (SuperClass_ClickFire); PreClick/PostClick weapons stay ready.
 		if (pSW && !pSW->deliver.empty() && ctx.wasReady && !pSuper->IsReady)
 		{
 			Delivery d;

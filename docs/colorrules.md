@@ -252,7 +252,7 @@ it, not his words. Tell me if any should change.
 ## Limits
 
 - An Ares `UnitDelivery` superweapon with `PreClick=` or `PostClick=` is not
-  matched, because Ares keeps such weapons "ready" after firing.
+  matched, because Antares keeps such weapons "ready" after firing.
 - An object of a delivered type made by something else in the same few
   frames could take the delivery's look. That would need the same type, the
   same moment and no other source, so it should be rare.

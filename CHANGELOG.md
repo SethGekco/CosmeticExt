@@ -7,6 +7,20 @@
 
 ## [unreleased] — 2026-10-30
 
+### Deployed — `ColorRules=` first build
+- CI run 41171835314 (commit 0690f1c; build and test green, 0 warnings)
+  produced `CosmeticExt.dll` with sha256 `c21006c3…`. It was copied
+  byte-identical into the live game dir, replacing `0c81c55a…`. Backups:
+  `CosmeticExt.dll.bak-cosmeticext-20261030-221759` and the matching `.map`.
+- Its `.syhks00` lists 19 hooks: the 13 ColorRules seats in DESIGN.md, the
+  five sound hooks, and the toolchain's `0x7504C9`. It imports only
+  KERNEL32. It is still last in both `wine-game.sh` and
+  `ClientDefinitions.ini`. Not yet seen running. Rex has the test snippet
+  in docs/colorrules.md; his INIs were not touched.
+- Comments and docs now credit Antares, not Ares, for clearing `IsReady`
+  only after a real launch. Why: that was read in Antares-src, and classic
+  Ares was not checked.
+
 ### Added — `ColorRules=` docs and test snippet; build warning fixed
 - `docs/colorrules.md`: the tag reference, when a look is decided and which
   rule wins, every *Reading* and *Builder's choice*, the limits, and a test
