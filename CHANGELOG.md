@@ -7,6 +7,20 @@
 
 ## [unreleased] — 2026-10-30
 
+### Decided — `ColorRules=` overlaps and owner changes (TODO.md #1)
+- Rex answered the three overlap examples on 2026-10-30: by default a rule
+  never passes along a chain.
+  - A delivered refinery's free harvester follows the refinery's
+    `FreeUnit.ColorRules`, not the superweapon's.
+  - A clone doesn't get the barracks' `Factory.ColorRules`.
+  - A deployed yard uses its own type's rule.
+- Each case gets its own opt-in tag to carry the colour over instead. The
+  names in TODO.md are suggestions only.
+- By default a rule stays when the owner changes.
+- Only the cycle's default scope is still open. Rex asked what the earlier
+  reading meant, so it was explained with an example. Why: so the builder
+  has every default before writing any code. Nothing is built yet.
+
 ### Decided — five of the six `ColorRules=` questions (TODO.md #1)
 - Rex answered on 2026-10-30. His words are quoted verbatim in TODO.md, each
   followed by what the builder takes from it:

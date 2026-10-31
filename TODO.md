@@ -6,7 +6,7 @@ nothing that Rex hasn't.
 
 ---
 
-## 1. Remap-colour and palette overrides (`ColorRules=`) — not started, two decisions open
+## 1. Remap-colour and palette overrides (`ColorRules=`) — not started, one answer to confirm
 
 Requested 2026-10-30. Verbatim:
 
@@ -109,6 +109,10 @@ says so; confirm a reading with Rex if building on it would be costly.
      `RemapColors.Scope=Game|House|Source` is only a suggestion).
    - Reading: by default there is one sequence for the whole game. It keeps
      going and never resets per player or per factory.
+   - Rex asked what that reading meant (2026-10-30). It was explained with an
+     example: two players, each building `AMCV`s under one cycle. Do they
+     share one place in the list, or does each player (or each factory) keep
+     its own? Open until Rex confirms.
 2. **`Repeat=`.** "Where in the cycle does it restart."
    - `Repeat=` names the entry the cycle restarts from after its last colour:
      `Beginning` and `End` are the list's first and last entries, `Center` the
@@ -129,8 +133,8 @@ says so; confirm a reading with Rex if building on it would be costly.
      rule replace whatever the object had, in full.
    - So "if they conflict" in the spec means two rules on the same channel.
 4. **Precedence.** "It should be impossible from how I'm seeing it. Can you
-   give an example of when there's overlaps?" See *Overlaps* below. Open
-   until Rex answers.
+   give an example of when there's overlaps?" Answered: see *Overlaps*
+   below.
 5. **`Invoker` with no invoker.** "Neutral/Civilian."
    - Objects nobody invoked, such as map-placed ones or ones a trigger
      creates, use the neutral (civilian) house's colour, the colour a
@@ -162,17 +166,51 @@ already has a rule makes, copies or turns into another:
   up again, does the new MCV get yellow back or the next colour? Crew leaving
   a destroyed vehicle and a carrier's aircraft raise the same question.
 
-Recommendation given to Rex: an object that turns into another, or is copied
-from one, keeps that colour. An object made by another uses its maker's tag,
-then its own type's rule, and nothing is inherited from further back.
+**Rex's overlap answers (2026-10-30), verbatim:**
+- Refinery: "FreeUnit belongs to the building, so the miner should follow its
+  own rules. The building lists to the superweapon, then it delivers a free
+  unit, that free unit doesn't come from the superweapon."
+- Cloning: "If it didn't come from the factory, the factory rules don't
+  apply."
+- Deploying: "I'd say normally no, the building will have its own rule just
+  like the vehicle."
+- All three: "For all three cases, they could all come with three separate
+  tags to enforce the color to come from these cases instead of listening to
+  my defaults."
+- Owner changes: "I would say by default, yes."
 
-**Still open for Rex** (do not guess these):
-- Decision 4, the overlap rule above.
-- **Owner changes.** Does a rule stay on an object whose owner changes (an
-  engineer capture, mind control, the Psychic Dominator)? Example: a zombie
-  showing its invoker's colour is mind-controlled by a third player. An
-  `Owner` rule follows the new owner by definition. Cycle, `Invoker` and
-  `PaletteSwitch` rules might stay or drop.
+**What the builder takes from them**
+- By default no rule passes along a chain. A rule applies only to what comes
+  directly out of the source that carries it:
+  - the free CMIN gets GAREFN's `FreeUnit.ColorRules`, then its own type's
+    rule, and never the superweapon's;
+  - a clone gets its own type's rule, and never the barracks'
+    `Factory.ColorRules`;
+  - a deployed yard uses its own type's rule. An MCV that packs up again
+    starts afresh on `AMCV`'s rule, so under a cycle it takes the next colour.
+  - Reading: crew and a carrier's aircraft follow the same default.
+- My recommendation was that copies and deploys keep their colour. Rex didn't
+  take it: keeping the colour is opt-in instead, with three tags, one per
+  case. The names and where they go are suggestions only:
+  - `FreeUnit.ColorRules.Inherit=yes` on the building: its free units copy
+    the building's colour, such as the invoker colour a superweapon gave it;
+  - `Cloning.ColorRules.Inherit=yes` on the cloning facility: clones copy the
+    original's colour;
+  - `Deploy.ColorRules.Inherit=yes` on the type that deploys or packs up: the
+    new object keeps the old one's colour. On `AMCV` it covers MCV → yard; on
+    `GACNST` it covers yard → MCV.
+  - Crew and spawned aircraft got no tag. The same pattern fits if wanted.
+- Owner changes: by default a rule stays when the owner changes.
+  - An `Owner` rule follows the new owner, because that is what it means.
+  - A cycle colour, an `Invoker` colour and a `PaletteSwitch` stay. A
+    mind-controlled zombie keeps its invoker's colour.
+  - "By default" leaves room for a tag that drops the rule on an owner
+    change. It hasn't been asked for.
+
+**Still open for Rex** (do not guess this):
+- Decision 1, the cycle's default scope. When several objects use one cycle,
+  do they share one place in the list for the whole game, or does each player
+  or each source keep its own?
 
 ---
 
