@@ -7,6 +7,21 @@
 
 ## [unreleased] — 2026-10-30
 
+### Decided — five of the six `ColorRules=` questions (TODO.md #1)
+- Rex answered on 2026-10-30. His words are quoted verbatim in TODO.md, each
+  followed by what the builder takes from it:
+  - the cycle scope is an INI setting, and by default one sequence runs for
+    the whole game;
+  - `Repeat=` names where the cycle restarts;
+  - remap and palette rules both apply, with a toggle to make one replace;
+  - `Invoker` falls back to the neutral (civilian) colour;
+  - remap still applies on a switched palette when it can.
+- Still open: what happens when two rules reach one object along a chain (a
+  delivered refinery's free harvester, clones, an MCV deploying), and whether
+  a rule survives an owner change. TODO.md has an example of each and the
+  recommendation sent to Rex. Why: Rex asked for examples before deciding.
+  Nothing is built yet.
+
 ### Deployed — LOCAL fix and `[SoundList]` diagnostic
 - CI run 41159376142 (commit fadc0fb; build and test green, 0 warnings)
   produced `CosmeticExt.dll` with sha256 `0c81c55a…`. It was copied

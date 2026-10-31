@@ -6,7 +6,7 @@ nothing that Rex hasn't.
 
 ---
 
-## 1. Remap-colour and palette overrides (`ColorRules=`) — not started
+## 1. Remap-colour and palette overrides (`ColorRules=`) — not started, two decisions open
 
 Requested 2026-10-30. Verbatim:
 
@@ -99,24 +99,80 @@ colours, and the synced randomizer is never touched.
 **State.** The rule an object was created under, and its cycle position, is
 per-object data. It must be kept in an extension map and survive save/load.
 
-**Open decisions for Rex** (do not guess these):
-1. **Cycle scope.** Does `Color_Cycle01` advance once for the whole game, per
-   house, or per source (each GAWEAP, each superweapon firing)?
-2. **`Repeat=` meanings.** When the list runs out, what does each of these do:
-   `Beginning` and `End` (the list's first and last entries?), `First` and
-   `Last` (the first and last colours actually produced, which differ under
-   `Random`?), and `Center`?
-3. **What counts as a conflict.** A remap rule and a `PaletteSwitch` rule
-   could both apply, as two separate channels. Or does one rule replace the
-   other whole?
-4. **Precedence when several sources apply.** Rex gave superweapon over the
-   type, factory over the type, and `FreeUnit` over the type. What about a
-   unit that gets two of these at once?
-5. **`Invoker` for things nobody invoked.** What colour do those use, for
-   example a map-placed civilian or a unit the AI's own superweapon delivers?
-   Owner?
-6. **Remap under a `PaletteSwitch` palette.** Do remap pixels still take the
-   rule's colour, or the palette's own colours?
+**Rex's answers (2026-10-30).** Each is quoted verbatim, then what the
+builder takes from it. Where the second part is a reading of the words, it
+says so; confirm a reading with Rex if building on it would be costly.
+
+1. **Cycle scope.** "Color cycle how I described it is up to the user, but by
+   default it should be continuous rather than limited."
+   - The scope is an INI setting on the cycle section (a name such as
+     `RemapColors.Scope=Game|House|Source` is only a suggestion).
+   - Reading: by default there is one sequence for the whole game. It keeps
+     going and never resets per player or per factory.
+2. **`Repeat=`.** "Where in the cycle does it restart."
+   - `Repeat=` names the entry the cycle restarts from after its last colour:
+     `Beginning` and `End` are the list's first and last entries, `Center` the
+     middle one, and `Random` a random entry at each restart. `First` and
+     `Last` are the first and last colours the cycle actually produced, which
+     differ from `Beginning` and `End` under `Pattern=Random` (Rex's note in
+     the spec).
+   - Builder's choices, to document: `Center` of an even count rounds down.
+     `Increment` with `Repeat=End` keeps the last colour for good, and
+     `Decrement` with `Repeat=Beginning` keeps the first. Both follow from the
+     definition and are not errors.
+   - Reading: under `Pattern=Random` the list only "runs out" if Random is a
+     shuffle, each colour once per pass. Treat it as a shuffle.
+3. **Palette and remap together.** "I want to say yes but we can make this
+   toggle-able."
+   - By default a remap rule and a `PaletteSwitch` rule are two channels and
+     both apply, even when they come from different sources. A toggle makes a
+     rule replace whatever the object had, in full.
+   - So "if they conflict" in the spec means two rules on the same channel.
+4. **Precedence.** "It should be impossible from how I'm seeing it. Can you
+   give an example of when there's overlaps?" See *Overlaps* below. Open
+   until Rex answers.
+5. **`Invoker` with no invoker.** "Neutral/Civilian."
+   - Objects nobody invoked, such as map-placed ones or ones a trigger
+     creates, use the neutral (civilian) house's colour, the colour a
+     map-placed civilian shows. Confirm which house that is in the loaded
+     mod. An AI that fires a superweapon is its invoker.
+6. **Remap on a switched palette.** "It should try."
+   - Remap pixels on a `PaletteSwitch` palette still take the rule's colour
+     when that palette can be remapped. When it can't, show the palette's own
+     colours, log it once per palette, and never fail.
+
+**Overlaps (sent to Rex 2026-10-30, for decision 4).** Rex is right for a
+single creation: an object comes out of one factory, one superweapon or one
+`FreeUnit=`, plus its own type's tag, and he has ranked each of those over the
+type. Two rules reach one object only along a chain, when an object that
+already has a rule makes, copies or turns into another:
+- *A superweapon delivers a refinery.* `Deliver.Types=GAREFN` with
+  `ColorRules=Color_RemapInvoker` gives the refinery the invoker's colour. It
+  still hands out its free CMIN (`BuildingClass::Place`; Ares grants it once,
+  `Ext/SWType/Hooks.Legacy.cpp:889`), and that CMIN gets GAREFN's
+  `FreeUnit.ColorRules=Color_Cycle01`. It also came, one step back, from the
+  superweapon. Cycle or invoker?
+- *Cloning.* Infantry built at a barracks with `Factory.ColorRules` comes out
+  yellow. A cloning facility copies it (`BuildingExt::KickOutClones`,
+  `Ext/Building/Body.cpp:1194`), and the copy leaves the vats, not the
+  barracks. Same yellow, the next colour in the cycle, or its own type's rule?
+- *Deploying.* An AMCV with `ColorRules=Color_Cycle01` comes out yellow. When
+  it deploys, the engine removes the unit and creates a new construction-yard
+  object. Does the yard keep yellow or use its own type's rule? When it packs
+  up again, does the new MCV get yellow back or the next colour? Crew leaving
+  a destroyed vehicle and a carrier's aircraft raise the same question.
+
+Recommendation given to Rex: an object that turns into another, or is copied
+from one, keeps that colour. An object made by another uses its maker's tag,
+then its own type's rule, and nothing is inherited from further back.
+
+**Still open for Rex** (do not guess these):
+- Decision 4, the overlap rule above.
+- **Owner changes.** Does a rule stay on an object whose owner changes (an
+  engineer capture, mind control, the Psychic Dominator)? Example: a zombie
+  showing its invoker's colour is mind-controlled by a third player. An
+  `Owner` rule follows the new owner by definition. Cycle, `Invoker` and
+  `PaletteSwitch` rules might stay or drop.
 
 ---
 
