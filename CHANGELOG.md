@@ -7,6 +7,22 @@
 
 ## [unreleased] — 2026-10-30
 
+### Deployed — the ColorRules test snippet
+- Rex asked for it on 2026-10-30. The new `tools/colorrules_test.py install`
+  put the docs/colorrules.md snippet into the live game's rulesmd.ini:
+  - five lines in `[CIV1]`, `[AMCV]`, `[GAWEAP]`, `[GAREFN]` and
+    `[AmericanParaDropSpecial]`;
+  - the three `[Color_*]` sections above the file's EOF-guard comment.
+- 17 lines added, none changed. Backup:
+  `rulesmd.ini.bak-cosmeticext-20261030-222940`. Nothing had the file open,
+  and the game wasn't running.
+- To undo it, run `tools/colorrules_test.py remove`, not the backup. Why: the
+  Zoo Tycoon session also edits rulesmd.ini (`[#include]`), and restoring the
+  backup would undo its changes. `remove` deletes only the marked lines; a
+  round trip on a copy came back byte-identical. The script reads the
+  snippet from the doc, so the two can't drift apart.
+- Not seen in game yet.
+
 ### Checked — loading a save made before `ColorRules=`
 - The save stream's `Read` (`0x4A2B60`) returns `E_FAIL` with nothing read,
   and no exception, when it runs out of blocks. So with the new DLL, a save

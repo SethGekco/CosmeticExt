@@ -20,6 +20,11 @@ to the section that already exists (`[CIV1]`, `[AMCV]` and so on). Don't
 start a second copy of those sections. All of them exist in the loaded mod,
 and so do the colours.
 
+`tools/colorrules_test.py install` does exactly this to the game's
+rulesmd.ini. It makes a backup first and marks every line it adds, so
+`remove` takes out only those lines and leaves other edits alone. `status`
+says whether it is in.
+
 ```ini
 ; --- new sections ---------------------------------------------------------
 [Color_Cycle01]
