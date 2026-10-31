@@ -7,6 +7,19 @@
 
 ## [unreleased] — 2026-10-30
 
+### Fixed — `Type=LOCAL` sounds use the engine's distance
+- The band pick, the travel delay and the echo threshold now measure a LOCAL
+  sound from the screen centre, as the engine's volume function does
+  (`test bl,0x40` at 0x750BFA). They used to measure every sound beyond the
+  screen edge, so a LOCAL sound with `Distance.Bands` would have switched band
+  at a different distance from the one it fades by. Vanilla has 31 LOCAL
+  sounds (ambients and loops). The volume and pan hooks were already right,
+  since they read the engine's own locals.
+- The maths moved into `DistanceModel::ViewDistance`, with 14 new host checks
+  for both metrics (74 in all). `ReadINI` now warns when only one of a sound
+  and its band is LOCAL, and the per-sound debug.log line marks LOCAL sounds.
+  Explosion14 is not LOCAL, so the installed listening test plays the same.
+
 ### Added — project
 - `TODO.md`, starting with Rex's request for `ColorRules=` (verbatim):
   - remap-colour cycles, `Owner` and `Invoker` remaps, and `PaletteSwitch`;
@@ -151,5 +164,5 @@
   Encyclopedia registry, plus a Linux job running the host tests.
 - `tools/mixread.py`, vendored verbatim from MapForge commit 647c8ac (header
   line only).
-- Host tests: `tests/run_tests.sh`, with 60 C++ checks of the distance model
+- Host tests: `tests/run_tests.sh`, with 60 C++ checks (74 since the LOCAL fix) of the distance model
   and 21 Python tests of the baker (23 since the level fix).

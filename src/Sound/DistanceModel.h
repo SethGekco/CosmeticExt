@@ -10,8 +10,9 @@
 // function 0x750AC0): Chebyshev distance in screen pixels beyond the tactical
 // view's edge, vertical component doubled (isometric), divided by the 60 px
 // width of a cell. So 0 = on screen, and Range= in soundmd.ini is measured in
-// the same unit. Time is game frames, so delays scale with game speed exactly
-// like projectiles and animations do.
+// the same unit. The exception is Type=LOCAL sounds, which the engine measures
+// from the screen centre (see ViewDistance). Time is game frames, so delays
+// scale with game speed exactly like projectiles and animations do.
 
 #include <string>
 #include <vector>
@@ -104,6 +105,14 @@ namespace DistanceModel
 
 	// Sound travel time in frames, capped at DelayMax.
 	int DelayFrames(const Resolved& r, float dist);
+
+	// The engine's distance, in cells, of a source whose client point is
+	// (x, y) in a w x h px tactical view (0x750AC0). For normal sounds it is
+	// how far the point lies beyond the view's edge: Chebyshev, vertical
+	// doubled, 0 anywhere on screen. Type=LOCAL sounds (Type & 0x40, tested at
+	// 0x750BFA) skip subtracting the half view, so they are measured from the
+	// screen centre, and an on-screen source is not at distance 0 for them.
+	float ViewDistance(float x, float y, float w, float h, bool local);
 
 	// Distance.Bands selection. `from` is ascending; a band applies once the
 	// source is MORE than from[i] cells beyond the edge, so From=0 means "any

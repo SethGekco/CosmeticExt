@@ -40,6 +40,13 @@ namespace
 		return pHandle ? *reinterpret_cast<VocClass**>(pHandle) : nullptr;
 	}
 
+	// Type=LOCAL (0x40): the volume function measures these from the screen
+	// centre instead of beyond the edge (0x750BFA).
+	bool IsLocal(const VocClass* pData)
+	{
+		return pData && (static_cast<DWORD>(pData->Type) & static_cast<DWORD>(SoundType::Local)) != 0;
+	}
+
 	struct SoundCfg
 	{
 		Params own;              // keys from the sound's own section
@@ -256,6 +263,9 @@ namespace
 		if (cfg.echoSound >= 0)
 			bands += std::string(" echoSound=") + NameOf(cfg.echoSound);
 
+		if (IsLocal(VocData(index)))
+			bands += " (Type=LOCAL: distances from the screen centre)";
+
 		Debug::Log("[CosmeticExt]   %s: falloff=%s rolloff=%.2fdB ref=%g fade=%g scatter=%gdB diffuse=%g "
 			"delay=%g/cell (max %d) echo=%d every %d f x%g from %g%s\n",
 			NameOf(index),
@@ -267,9 +277,10 @@ namespace
 	// ---- the engine's distance metric ------------------------------------
 
 	// Mirror of VocClass's volume function 0x750AC0, so band choice and travel
-	// delay use exactly the distance the engine attenuates by: pixels beyond
-	// the tactical view edge, vertical doubled, Chebyshev, in cells.
-	bool EdgeDistance(const CoordStruct& coords, float& dist)
+	// delay use exactly the distance the engine attenuates by -- beyond the
+	// view edge, or from the centre for Type=LOCAL (DistanceModel::ViewDistance).
+	// `pData` is the sound the decision is made for: the base, not its band.
+	bool EngineDistance(const VocClass* pData, const CoordStruct& coords, float& dist)
 	{
 		auto const pTactical = TacticalClass::Instance;
 		if (!pTactical)
@@ -283,11 +294,9 @@ namespace
 #pragma warning(suppress: 4996)
 		pTactical->CoordsToClient(&coords, &client);
 
-		const float halfW = DSurface::ViewBounds.Width * 0.5f;
-		const float halfH = DSurface::ViewBounds.Height * 0.5f;
-		const float dx = std::max(0.0f, std::fabs(client.X - halfW) - halfW);
-		const float dy = std::max(0.0f, std::fabs(client.Y - halfH) - halfH);
-		dist = std::max(dx, 2.0f * dy) / PixelsPerCell;
+		dist = ViewDistance(static_cast<float>(client.X), static_cast<float>(client.Y),
+			static_cast<float>(DSurface::ViewBounds.Width), static_cast<float>(DSurface::ViewBounds.Height),
+			IsLocal(pData));
 		return true;
 	}
 
@@ -318,6 +327,7 @@ namespace
 			return false;
 
 		auto const& cfg = Sounds[index];
+		auto const pData = VocData(index);
 		bool defers = cfg.model.Defers();
 		if (defers)
 		{
@@ -328,7 +338,6 @@ namespace
 			// explosion path, 0x42211A). A loop played free would never stop,
 			// and a busy controller means vanilla wants to keep or replace
 			// what it is playing, so both play now, untouched.
-			auto const pData = VocData(index);
 			const bool loops = pData && (pData->Control & SoundControl::Loop) != SoundControl::None;
 			defers = !loops && (!pCtrl || !pCtrl->GetEvent());
 		}
@@ -336,7 +345,7 @@ namespace
 			return false;
 
 		float dist = 0.0f;
-		if (!EdgeDistance(coords, dist))
+		if (!EngineDistance(pData, coords, dist))
 			return false;
 
 		const int band = PickBand(cfg.from, dist);
@@ -476,6 +485,15 @@ void DistanceSound::ReadINI(CCINIClass* pINI)
 			else if (Sounds[band].parent != i)
 				Debug::Log("[CosmeticExt] %s is a band of both %s and %s -- it inherits from %s.\n",
 					NameOf(band), NameOf(Sounds[band].parent), NameOf(i), NameOf(Sounds[band].parent));
+
+			// The band is picked by its base's distance but faded by its own:
+			// with Type=LOCAL on only one of them, the two are measured from
+			// different places (centre vs edge) and disagree.
+			if (IsLocal(VocData(band)) != IsLocal(VocData(i)))
+				Debug::Log("[CosmeticExt] [%s] Type=LOCAL is set on only one of it and its band %s -- the band is "
+					"picked by the screen-%s distance but fades by the screen-%s one. Give both the same Type.\n",
+					NameOf(i), NameOf(band), IsLocal(VocData(i)) ? "centre" : "edge",
+					IsLocal(VocData(band)) ? "centre" : "edge");
 		}
 	}
 

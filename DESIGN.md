@@ -72,14 +72,19 @@ Two `Type` bits change the metric. Both were read from the disassembly on
 
 `Screen` (`0x20`) is not tested here or in PlayAt.
 
-**Known gap: `Local` sounds.** The volume hook reads the engine's own locals,
-so its distance agrees with vanilla for `Local` sounds too. `EdgeDistance`,
-however, always measures beyond the edge. It drives the band pick, the delay
-and the echo threshold. So a `Type=LOCAL` sound with `Distance.Bands`,
-`Delay` or `Echo` would pick its band at a different distance from the one
-it fades by. Vanilla has 31 such sounds, all ambients and loops. Loops are
-never deferred, but bands on them would still disagree. The fix is for
-`EdgeDistance` to skip the half-size subtraction when `Type & 0x40`.
+**`Local` sounds follow the engine (fixed 2026-10-30).** The volume and pan
+hooks read the engine's own locals, so they always agreed with vanilla. The
+band pick, the delay and the echo threshold, however, used a distance the DLL
+computed itself, and that was always measured beyond the edge. So a
+`Type=LOCAL` sound would pick its band at a different distance from the one
+it fades by. Vanilla has 31 LOCAL sounds, all ambients and loops.
+
+Now `EngineDistance` passes the base sound's LOCAL bit to
+`DistanceModel::ViewDistance`, which skips the half-size subtraction exactly
+as the engine does. The host tests cover both metrics. The base's bit is used
+because the decision is made for the base. `ReadINI` logs a warning when a
+band's LOCAL bit differs from its base's, because then the pick and the fade
+cannot agree.
 
 ## Hooks
 
@@ -222,7 +227,7 @@ See the module docstring of `tools/distance_bake.py` and the tag reference.
 ## Status
 
 - Host-tested:
-  - the distance model (60 checks)
+  - the distance model (74 checks)
   - the baker (23 tests: physics, level, limiter, codec, names, end-to-end,
     idempotency, foreign-bag refusal)
 - Hook seats: verified statically, as listed above.

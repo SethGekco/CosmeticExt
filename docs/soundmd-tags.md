@@ -31,6 +31,17 @@ the vertical part doubled for the isometric view, divided by 60 px per cell.
   never below their `MinVolume=` (that floor is what "global" means in the
   engine). The floor is applied after CosmeticExt's adjustment, so a global
   sound stays audible everywhere.
+- **`Type=local` sounds are measured from the screen centre**, because that is
+  how the engine measures their `Range`. CosmeticExt follows it, so every
+  `Distance.*` value on a LOCAL sound counts cells from the centre, and on
+  screen is no longer 0. On a 1024 px wide view, the left and right edges are
+  about 8.5 cells out, so `Distance.Bands.From=4` switches band while the
+  source is still on screen. Vanilla's LOCAL sounds are ambients and loops,
+  such as campfires, fountains and urban murmur.
+- Give a sound and its bands the same `Type`. A band is picked by its base's
+  distance but fades by its own, so if only one of them is LOCAL the two are
+  measured from different places. The DLL logs a warning when that happens.
+  The baker copies the base's `Type=` into its variants.
 
 ## Runtime tags
 

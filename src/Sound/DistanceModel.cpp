@@ -110,6 +110,20 @@ namespace DistanceModel
 		return static_cast<int>(std::clamp<long>(frames, 0, r.delayMax));
 	}
 
+	float ViewDistance(float x, float y, float w, float h, bool local)
+	{
+		const float halfW = w * 0.5f;
+		const float halfH = h * 0.5f;
+		float dx = std::fabs(x - halfW);
+		float dy = std::fabs(y - halfH);
+		if (!local)
+		{
+			dx = std::max(0.0f, dx - halfW);
+			dy = std::max(0.0f, dy - halfH);
+		}
+		return std::max(dx, 2.0f * dy) / PixelsPerCell;
+	}
+
 	int PickBand(const std::vector<float>& from, float dist)
 	{
 		int band = -1;

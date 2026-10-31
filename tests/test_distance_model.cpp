@@ -171,6 +171,30 @@ int main()
 		CHECK(!own.falloff.set && own.Any() && !Params {}.Any());
 	}
 
+	// --- the engine's distance metric (0x750AC0) ----------------------------------
+	{
+		// 1024 x 768 view: centre (512, 384), half sizes 512 / 384.
+		const float W = 1024.0f, H = 768.0f;
+		CHECK(Near(ViewDistance(512, 384, W, H, false), 0.0f));          // centre
+		CHECK(Near(ViewDistance(1000, 700, W, H, false), 0.0f));         // anywhere on screen: 0
+		CHECK(Near(ViewDistance(1024 + 120, 384, W, H, false), 2.0f));   // 120 px right of the edge
+		CHECK(Near(ViewDistance(-120, 384, W, H, false), 2.0f));         // ... and left, symmetric
+		CHECK(Near(ViewDistance(512, 768 + 30, W, H, false), 1.0f));     // vertical doubled
+		CHECK(Near(ViewDistance(1024 + 60, 768 + 45, W, H, false), 1.5f)); // Chebyshev: the larger
+
+		// Type=LOCAL: from the centre, nothing subtracted, on screen included.
+		CHECK(Near(ViewDistance(512, 384, W, H, true), 0.0f));
+		CHECK(Near(ViewDistance(1024, 384, W, H, true), 512.0f / 60.0f)); // the edge is ~8.5 cells
+		CHECK(Near(ViewDistance(1024 + 120, 384, W, H, true), 632.0f / 60.0f));
+		CHECK(Near(ViewDistance(512, 384 + 90, W, H, true), 3.0f));       // vertical doubled too
+		CHECK(Near(ViewDistance(512, 384 - 90, W, H, true), 3.0f));
+		// A LOCAL source is always at least as far as a normal one at the same point.
+		CHECK(ViewDistance(1100, 50, W, H, true) >= ViewDistance(1100, 50, W, H, false));
+		// So bands are picked differently on screen: From=4 is crossed at 240 px from the centre.
+		CHECK(PickBand({ 4.0f }, ViewDistance(512 + 300, 384, W, H, true)) == 0);
+		CHECK(PickBand({ 4.0f }, ViewDistance(512 + 300, 384, W, H, false)) == -1);
+	}
+
 	// --- parsing ------------------------------------------------------------------
 	{
 		Falloff f = Falloff::Linear;
