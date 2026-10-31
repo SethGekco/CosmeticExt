@@ -7,6 +7,14 @@
 
 ## [unreleased] — 2026-10-30
 
+### Checked — loading a save made before `ColorRules=`
+- The save stream's `Read` (`0x4A2B60`) returns `E_FAIL` with nothing read,
+  and no exception, when it runs out of blocks. So with the new DLL, a save
+  from before this feature fails the 4-byte magic read cleanly and loads
+  with vanilla colours. Why: Rex's existing saves go through that path
+  first, and a throw there would have broken them. Disassembly only;
+  recorded in DESIGN.md.
+
 ### Deployed — `ColorRules=` first build
 - CI run 41171835314 (commit 0690f1c; build and test green, 0 warnings)
   produced `CosmeticExt.dll` with sha256 `c21006c3…`. It was copied

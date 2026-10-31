@@ -280,6 +280,15 @@ reference is [docs/colorrules.md](docs/colorrules.md).
   disturbed. At Phobos' pair the same read would eat the next block's bytes
   and break the load. The block starts with a magic, a version and a byte
   length, and the payload is parsed with bounds checks.
+- **Reading past the end of a save is safe.** The save stream is the
+  game's own block-compressing COM stream (CLSID
+  `b48fa168-646f-11d2-9b74-00104b972fe8`, vtable `0x7E5DAC`). Its `Read`
+  (`0x4A2B60`) refills from an 8-byte block header. When the header read
+  comes back short, it returns `E_FAIL` (`0x80004005`) with `*pcbRead = 0`,
+  and it throws nothing (`_com_issue_error` only fires on a null inner
+  stream). So an old save gives a failed 4-byte magic read, which the load
+  hook reports as "no ColorRules block". Read from disassembly, not yet
+  seen in game.
 - **Rules are read idempotently**, on every pass, at the `Read_File` tail.
   A key absent from a pass leaves the earlier value alone. A rule first
   named by a later file is looked up in rulesmd.ini too. Type tags are
