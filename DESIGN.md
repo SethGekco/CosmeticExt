@@ -233,6 +233,10 @@ See the module docstring of `tools/distance_bake.py` and the tag reference.
 - Hook seats: verified statically, as listed above.
 - Verified in game (2026-10-25): the DLL loads and reads every sound (818 in the
   loaded mod). A 32-minute game exited cleanly with all five hooks installed.
-- Not yet verified in game: the distance behaviour itself (bands, falloff,
-  scatter, diffuse, delay, echo). A listening test of Explosion14 has been
-  installed (2026-10-25, see CHANGELOG), and its debug.log lines will settle it.
+- Verified in game (2026-10-26, Explosion14 listening test): the band pick,
+  the travel delay and the echo threshold. Each logged decision matches the
+  model. Volume, pan, scatter and the echo's playback are not logged, so they
+  rest on listening.
+- Open: with the test installed the engine counted 820 sounds against 821
+  distinct `[SoundList]` names. `CheckSoundList` logs which name was lost
+  (see CHANGELOG).

@@ -14,11 +14,13 @@
 #include <Windows.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 using namespace DistanceModel;
@@ -274,6 +276,36 @@ namespace
 			bands.c_str());
 	}
 
+	// LoadAll (0x7512C6) makes one sound per distinct [SoundList] value: it
+	// reads each into a 32-byte buffer and adds it unless an existing sound
+	// has that name (_strcmpi, the same test as FindIndex 0x7514D0). So
+	// sounds == distinct names unless an entry got lost. If one did, name it:
+	// a total that is one short does not say which sound went missing.
+	void CheckSoundList(CCINIClass* pINI)
+	{
+		const char* const section = "SoundList";
+		const int keys = pINI->GetKeyCount(section);
+		std::unordered_set<std::string> distinct;
+		int lost = 0;
+		for (int k = 0; k < keys; ++k)
+		{
+			auto const key = pINI->GetKeyName(section, k);
+			char name[0x20] {};
+			if (!key || pINI->ReadString(section, key, "", name, sizeof(name)) <= 0)
+				continue;
+			std::string upper(name);
+			for (auto& c : upper)
+				c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+			if (!distinct.insert(upper).second)
+				continue;
+			if (VocClass::FindIndex(name) < 0 && ++lost <= 20)
+				Debug::Log("[CosmeticExt] [SoundList] %s=%s did not become a sound.\n", key, name);
+		}
+		if (lost || static_cast<int>(distinct.size()) != VocClass::Array.Count)
+			Debug::Log("[CosmeticExt] [SoundList]: %d key(s), %d distinct name(s), %d sound(s), %d name(s) without a sound.\n",
+				keys, static_cast<int>(distinct.size()), VocClass::Array.Count, lost);
+	}
+
 	// ---- the engine's distance metric ------------------------------------
 
 	// Mirror of VocClass's volume function 0x750AC0, so band choice and travel
@@ -520,6 +552,7 @@ void DistanceSound::ReadINI(CCINIClass* pINI)
 		count, configured,
 		globalModel ? " ([CosmeticExt] defaults apply to every sound)" : "",
 		Global.enabled ? "" : " -- [CosmeticExt] Enabled=no, all of it OFF");
+	CheckSoundList(pINI);
 
 	// Per-sound detail is for verifying an INI; with global defaults on every
 	// sound would print, so list only sounds with their own keys or bands.

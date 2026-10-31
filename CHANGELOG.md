@@ -7,6 +7,39 @@
 
 ## [unreleased] — 2026-10-30
 
+### Verified in game — the Explosion14 listening test
+- Two games on 2026-10-26 (00:17 and 00:29) ran with the listening test
+  installed. debug.log listed Explosion14 and `Explosion14_D1..D3`, with
+  `bandOf=` and the inherited model, and logged 20 runtime decisions. All of
+  them match the design:
+  - the bands switch past 4, 14 and 32 cells (12.6 → D1, 14.1 → D2,
+    46.7 → D3);
+  - the delay is 0.25 frames per cell, rounded and capped at 15 (22 cells →
+    6 frames, 56.2 → 14);
+  - the echo happens only from 14 cells (12.5 → none, 14.1 → one).
+  So the PlayAt hook's band rewrite and deferral run in game. Volume, pan and
+  the echo's actual playback are not logged; Rex's ears are the check there.
+- **One sound short.** The engine reported 820 sounds. The installed
+  soundmd.ini has 850 `[SoundList]` keys and 821 distinct names, and all
+  three variants are among the 820, so one other sound is missing. The same
+  count against the vanilla soundmd matched exactly (818). Offline checks
+  ruled out duplicate keys, key and section CRC clashes, non-numeric keys,
+  names over 31 characters and missing samples. Hence the new diagnostic
+  below.
+- Games launched from 2026-10-26 19:31 on had no Ext DLL injected at all.
+  syringe.log recognised only Antares, CnCNet-Spawner, PhobosCompatExt and
+  Phobos (2,973 hooks), so those logs say nothing about CosmeticExt. This is
+  not a CosmeticExt fault: every sibling DLL was missing in the same way.
+
+### Added — `[SoundList]` loss diagnostic
+- At load, every distinct `[SoundList]` name is checked against the engine's
+  sound list, the same way `LoadAll` and `FindIndex` compare names. Any name
+  that did not become a sound is logged as
+  `[CosmeticExt] [SoundList] <key>=<name> did not become a sound.`
+  A totals line follows whenever names and sounds differ. So the next game
+  names the sound missing from the 820, or shows that the engine's INI saw
+  fewer keys than the file has.
+
 ### Fixed — `Type=LOCAL` sounds use the engine's distance
 - The band pick, the travel delay and the echo threshold now measure a LOCAL
   sound from the screen centre, as the engine's volume function does

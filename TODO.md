@@ -120,8 +120,11 @@ per-object data. It must be kept in an extension map and survive save/load.
 
 ---
 
-## 2. Distance sound: confirm in game — waiting on a game
+## 2. One sound short with the listening test installed — waiting on a game
 
-The Explosion14 listening test was installed on 2026-10-25 (CHANGELOG,
-"Deployed — Explosion14 listening test"). The next debug.log should show 821
-sounds and lines like `frame N: Explosion14 at d cells -> Explosion14_Dk`.
+The band pick, the delay and the echo were confirmed in game on 2026-10-26
+(CHANGELOG). The engine counted 820 sounds against 821 distinct
+`[SoundList]` names, though, and the offline checks found no cause. The
+deployed DLL now logs `[SoundList] <key>=<name> did not become a sound` at
+load. Read that line after the next game, then fix the cause (in the baker if
+it is ours). Only then widen the test beyond Explosion14.
