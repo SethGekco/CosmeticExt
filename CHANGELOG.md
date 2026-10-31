@@ -5,6 +5,19 @@
 > other's context, so this file is the shared channel. Newest first, and always
 > say *why*: the reason is what saves the next agent.
 
+## [unreleased] — 2026-10-30
+
+### Added — project
+- `TODO.md`, starting with Rex's request for `ColorRules=` (verbatim):
+  - remap-colour cycles, `Owner` and `Invoker` remaps, and `PaletteSwitch`;
+  - set per TechnoType, superweapon (UnitDelivery, ParaDrop), factory and
+    `FreeUnit`;
+  - with civilian/neutral units as the key case.
+- The notes there give the engine fields, the Antares prior art (anim
+  `LightConvert` re-owning) and the open decisions. They decide nothing that
+  Rex hasn't. It belongs in CosmeticExt because it changes colours only: the
+  zombie example keeps `civilian` as the owner.
+
 ## [unreleased] — 2026-10-25
 
 ### Deployed — Explosion14 listening test
