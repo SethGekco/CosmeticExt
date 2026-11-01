@@ -7,6 +7,20 @@
 
 ## [unreleased] — 2026-10-31
 
+### Seen in game — deploying and packing up follow the cycle
+- Rex's second 10-31 game (20:15), his words: "When I start with the MCV,
+  it's red. When I deploy, I have a blue construction yard like my player
+  color. When I undeploy it, I got light blue (or cyan). Deployed again, got
+  blue, un deploy and got yellow."
+- debug.log agrees: `AMCV #1047762 (deploy) -> colour LightBlue` and
+  `AMCV #1047770 (deploy) -> colour Yellow`, each with its `drawing` line.
+  GACNST has no rule, so the yard was never logged and wore the house
+  colour.
+- This is the default Rex chose (TODO #1, deploying): no rule passes along a
+  deploy, so each packed-up MCV is a new AMCV on its own type's cycle and
+  takes the next colour. Keeping the colour is the opt-in
+  `Deploy.ColorRules.Inherit=yes`, which the test snippet doesn't set.
+
 ### Seen in game — the ColorRules MCV colour
 - Rex's 10-31 game (19:43, the aa65ffc DLL `67d2d23a…`), his words: "the
   MCV indeed start red and deployed to my player color." debug.log agrees:
