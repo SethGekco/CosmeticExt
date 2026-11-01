@@ -6,7 +6,7 @@ nothing that Rex hasn't.
 
 ---
 
-## 1. Remap-colour and palette overrides (`ColorRules=`) — built 2026-10-30, first game showed three faults (fixed, not yet seen in game)
+## 1. Remap-colour and palette overrides (`ColorRules=`) — built 2026-10-30, first game showed three faults (fixed; 10-31 game confirmed the MCV, factory/miner/paradrop not yet seen)
 
 **Status (2026-10-30).** Built as specified below: `src/Color/`, host tests
 in `tests/test_color_model.cpp`, reference and a test snippet in

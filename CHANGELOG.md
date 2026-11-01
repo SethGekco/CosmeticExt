@@ -5,6 +5,20 @@
 > other's context, so this file is the shared channel. Newest first, and always
 > say *why*: the reason is what saves the next agent.
 
+## [unreleased] — 2026-10-31
+
+### Seen in game — the ColorRules MCV colour
+- Rex's 10-31 game (19:43, the aa65ffc DLL `67d2d23a…`), his words: "the
+  MCV indeed start red and deployed to my player color." debug.log agrees:
+  both starting AMCVs got DarkRed (each house starts at the cycle's first
+  colour), `drawing AMCV #1047699 in colour DarkRed`, and the yard has no
+  rule, so it takes the house colour.
+- Still not seen: war-factory yellow, the miner cycle with matching guns,
+  and the paradrop palette. That game built only a power plant, barracks
+  and engineers before it closed, so it had nothing to show for them. The
+  log's six `kick-out … factory product` lines show the factory hook now
+  runs.
+
 ## [unreleased] — 2026-10-30
 
 ### Deployed — the ColorRules fix build (aa65ffc)
