@@ -5,6 +5,28 @@
 > other's context, so this file is the shared channel. Newest first, and always
 > say *why*: the reason is what saves the next agent.
 
+## [unreleased] — 2026-11-01
+
+### Seen in game — war factory, free miner, attachments and paradrop
+- Rex's 11-01 game (still running when checked), his words: "GAREFN free
+  CMIN comes out light blue (cyan). The vehicles all built from GAWEAP are
+  yellow. Paradrop still has infantry in new palette. MCV started red,
+  deploying and undeploying causes colors to shift in the order of Red,
+  Cyan, Yellow, Red... repeat."
+- debug.log agrees on every point:
+  - `(factory) -> colour Yellow` for CMIN, MTNK, TNKD, FV, SCHP and ROBO,
+    with each attached USAGUN Yellow too, so the aa65ffc factory and
+    attachment fixes work;
+  - two free CMINs, both LightBlue with LightBlue guns. FreeUnitExt shows
+    one went to Americans and one to Netherlands, so each player's cycle is
+    separate, and each player's MCV had already taken DarkRed;
+  - 20 `E1 (superweapon drop) -> colour DarkBlue, palette iso`: the
+    invoker's colour on the terrain palette;
+  - the MCV shares Color_Cycle01 with the free miner, so after the miner
+    took LightBlue, Rex's packed-up MCVs came out Yellow, then DarkRed.
+- Still unseen: map civilians (`CIV1`, not on this map) and the save/load
+  lines. The test snippet stays installed until Rex asks for it to go.
+
 ## [unreleased] — 2026-10-31
 
 ### Seen in game — deploying and packing up follow the cycle
